@@ -218,6 +218,7 @@ class _HomePageState extends State<HomePage> {
   List<Category> _expenseCategories = [];
   List<Category> _incomeCategories = [];
   List<Account> _accounts = [];
+  List<Budget> _budgets = [];
   int _accountGridColumns = 3;
   int _currentIndex = 0;
   String _statsType = 'month';
@@ -237,8 +238,12 @@ class _HomePageState extends State<HomePage> {
     final txJson = prefs.getString('transactions');
     final catJson = prefs.getString('categories');
     final acctJson = prefs.getString('accounts');
+    final budgetJson = prefs.getString('budgets');
 
     setState(() {
+      if (budgetJson != null) {
+        _budgets = (jsonDecode(budgetJson) as List).map((e) => Budget.fromJson(e)).toList();
+      }
       if (txJson != null) {
         _transactions =
             (jsonDecode(txJson) as List).map((e) => Transaction.fromJson(e)).toList();
@@ -296,6 +301,12 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         'accounts', jsonEncode(_accounts.map((e) => e.toJson()).toList()));
+  }
+
+  Future<void> _saveBudgets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'budgets', jsonEncode(_budgets.map((e) => e.toJson()).toList()));
   }
 
   void _addTransaction(Transaction tx) {
@@ -391,6 +402,160 @@ class _HomePageState extends State<HomePage> {
     return brightness == Brightness.dark 
         ? Colors.cyanAccent // 深色背景用亮青色
         : const Color(0xFF006064); // 浅色背景用深青色
+  }
+
+  Widget _buildBudgetCard() {
+    if (_budgets.isEmpty) return const SizedBox.shrink();
+    
+    final now = DateTime.now();
+    final monthKey = '${now.year}-${now.month}';
+    
+    // 计算本月各类别支出
+    final monthExpenses = _transactions.where((t) => 
+        t.isExpense && 
+        t.date.year == now.year && 
+        t.date.month == now.month);
+    
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('本月预算', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              TextButton(
+                onPressed: _showAddBudgetDialog,
+                child: const Text('设置', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._budgets.map((budget) {
+            final spent = monthExpenses
+                .where((t) => t.category == budget.category)
+                .fold(0.0, (sum, t) => sum + t.amount);
+            final remaining = budget.limit - spent;
+            final percent = (spent / budget.limit).clamp(0.0, 1.0);
+            
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(budget.emoji, style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 8),
+                      Text(budget.category, style: const TextStyle(fontSize: 14)),
+                      const Spacer(),
+                      Text('¥${spent.toStringAsFixed(0)}/¥${budget.limit.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(
+                    value: percent,
+                    backgroundColor: Colors.grey[300],
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      percent > 0.8 ? Colors.red : Colors.green,
+                    ),
+                  ),
+                   if (remaining < 0)
+                     Text('已超支¥${(-remaining).toStringAsFixed(2)}',
+                         style: const TextStyle(fontSize: 12, color: Colors.red)),
+                 ],
+               ),
+             );
+           }),
+         ],
+       ),
+     );
+  }
+
+  void _showAddBudgetDialog() {
+    final categoryController = TextEditingController();
+    final limitController = TextEditingController();
+    String selectedEmoji = '💰';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('设置月预算'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: categoryController,
+              decoration: const InputDecoration(
+                labelText: '类别名（如：餐饮）',
+                hintText: '输入预算类别',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: limitController,
+              decoration: const InputDecoration(
+                labelText: '预算金额',
+                hintText: '输入每月预算',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('图标：', style: TextStyle(fontSize: 14)),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    // 简单emoji选择
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(selectedEmoji, style: const TextStyle(fontSize: 24)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final category = categoryController.text.trim();
+              final limit = double.tryParse(limitController.text) ?? 0;
+              if (category.isNotEmpty && limit > 0) {
+                setState(() {
+                  _budgets.removeWhere((b) => b.category == category);
+                  _budgets.add(Budget(
+                    category: category,
+                    limit: limit,
+                    emoji: selectedEmoji,
+                  ));
+                });
+                _saveBudgets();
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildHome() {
@@ -522,13 +687,17 @@ class _HomePageState extends State<HomePage> {
                      ],
                    ),
                  ),
-               ],
-             ),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          sliver: SliverList(
+                 ],
+              ),
+           ),
+         ),
+         // 预算卡片
+         SliverToBoxAdapter(
+           child: _buildBudgetCard(),
+         ),
+         SliverPadding(
+           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 final filtered = _filteredTransactions;
