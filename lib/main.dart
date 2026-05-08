@@ -135,19 +135,22 @@ class Category {
   final String name;
   final String emoji;
   final bool isExpense;
+  int color;
 
-  Category({required this.name, this.emoji = '', required this.isExpense});
+  Category({required this.name, this.emoji = '', required this.isExpense, this.color = 0xFF667eea});
 
   Map<String, dynamic> toJson() => {
     'name': name,
     'emoji': emoji,
     'isExpense': isExpense,
+    'color': color,
   };
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
     name: json['name'],
     emoji: json['emoji'] ?? '',
     isExpense: json['isExpense'],
+    color: json['color'] ?? 0xFF667eea,
   );
 }
 
@@ -156,12 +159,14 @@ class Account {
   String name;
   String emoji;
   double balance;
+  int color;
 
   Account({
     required this.id,
     required this.name,
     this.emoji = '🏦',
     this.balance = 0,
+    this.color = 0xFF667eea,
   });
 
   Map<String, dynamic> toJson() => {
@@ -169,6 +174,7 @@ class Account {
     'name': name,
     'emoji': emoji,
     'balance': balance,
+    'color': color,
   };
 
   factory Account.fromJson(Map<String, dynamic> json) => Account(
@@ -176,6 +182,7 @@ class Account {
     name: json['name'],
     emoji: json['emoji'] ?? '🏦',
     balance: (json['balance'] as num?)?.toDouble() ?? 0,
+    color: json['color'] ?? 0xFF667eea,
   );
 }
 
@@ -865,11 +872,11 @@ class _HomePageState extends State<HomePage> {
                         onTap: () => _showEditAccountDialog(a),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainer,
+                            color: Color(a.color),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.08),
+                                color: Theme.of(context).colorScheme.shadow.withValues(alpha:0.08),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2),
                               ),
@@ -885,9 +892,12 @@ class _HomePageState extends State<HomePage> {
                               Text(a.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 13,
-                                      fontWeight: FontWeight.w500)),
+                                      fontWeight: FontWeight.w500,
+                                      color: ThemeData.estimateBrightnessForColor(Color(a.color)) == Brightness.dark 
+                                          ? Colors.white 
+                                          : Colors.black)),
                               const SizedBox(height: 4),
                               Text(
                                 '¥${a.balance.toStringAsFixed(2)}',
@@ -1185,7 +1195,7 @@ class _HomePageState extends State<HomePage> {
           final color = colors[i++ % colors.length];
           return PieChartSectionData(
             value: e.value,
-            title: e.key,
+            title: '${e.key}\n¥${e.value.toStringAsFixed(0)}',
             color: color,
             radius: 60,
             titleStyle: const TextStyle(
@@ -1884,6 +1894,32 @@ class _HomePageState extends State<HomePage> {
             child: Center(child: Text(e, style: const TextStyle(fontSize: 20))),
           ),
         );
+        }).toList(),
+    );
+  }
+
+  Widget _buildColorPicker(ValueChanged<int> onColorSelected) {
+    final colors = [
+      0xFF667eea, 0xFF764ba2, 0xFFf093fb, 0xFF4facfe,
+      0xFF00f2fe, 0xFF43e97b, 0xFF38f9d7, 0xFFffecd2,
+      0xFFfcb69f, 0xFFa18cd1, 0xFFfbc2eb, 0xFFff9a9e,
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: colors.map((c) {
+        return GestureDetector(
+          onTap: () => onColorSelected(c),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Color(c),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+          ),
+        );
       }).toList(),
     );
   }
@@ -1892,6 +1928,7 @@ class _HomePageState extends State<HomePage> {
     final nameController = TextEditingController();
     final emojiController = TextEditingController();
     final balanceController = TextEditingController();
+    int selectedColor = 0xFF667eea;
 
     showDialog(
       context: context,
@@ -1926,6 +1963,11 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 12),
+            Text('选择账户颜色',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            _buildColorPicker((color) => selectedColor = color),
+            const SizedBox(height: 12),
             Text('选择 Emoji',
                 style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 6),
@@ -1949,6 +1991,7 @@ class _HomePageState extends State<HomePage> {
                   name: name,
                   emoji: emoji.isEmpty ? '🏦' : emoji,
                   balance: balance,
+                  color: selectedColor,
                 ));
                 _saveAccounts();
               });
@@ -1970,6 +2013,7 @@ class _HomePageState extends State<HomePage> {
     final emojiController = TextEditingController(text: account.emoji);
     final balanceController = TextEditingController(
         text: account.balance.toStringAsFixed(2));
+    int selectedColor = account.color;
 
     showDialog(
       context: context,
@@ -2004,6 +2048,11 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 12),
+            Text('选择账户颜色',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            _buildColorPicker((color) => selectedColor = color),
+            const SizedBox(height: 12),
             Text('选择 Emoji',
                 style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 6),
@@ -2025,6 +2074,7 @@ class _HomePageState extends State<HomePage> {
                 account.name = name;
                 account.emoji = emoji.isEmpty ? '🏦' : emoji;
                 account.balance = balance;
+                account.color = selectedColor;
                 _saveAccounts();
               });
               Navigator.pop(ctx);
