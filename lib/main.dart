@@ -477,66 +477,28 @@ class _HomePageState extends State<HomePage> {
         ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: '搜索记录...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                ),
-                if (_searchQuery.isNotEmpty || _filterCategory != null) ...[
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        if (_filterCategory != null)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Chip(
-                              label: Text(_filterCategory!, style: const TextStyle(fontSize: 12)),
-                              deleteIcon: const Icon(Icons.close, size: 16),
-                              onDeleted: () => setState(() => _filterCategory = null),
-                            ),
-                          ),
-                        if (_searchQuery.isNotEmpty)
-                          TextButton.icon(
-                            icon: const Icon(Icons.clear, size: 16),
-                            label: const Text('清除搜索', style: TextStyle(fontSize: 12)),
-                            onPressed: () => setState(() { _searchQuery = ''; _filterCategory = null; }),
-                          ),
-                      ],
-                    ),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        ..._expenseCategories.take(6).map((c) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            avatar: Text(c.emoji, style: const TextStyle(fontSize: 14)),
-                            label: Text(c.name, style: const TextStyle(fontSize: 12)),
-                            onPressed: () => setState(() => _filterCategory = c.name),
-                          ),
-                        )),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
+             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+             child: Column(
+               children: [
+                 const SizedBox(height: 8),
+                 SizedBox(
+                   height: 36,
+                   child: ListView(
+                     scrollDirection: Axis.horizontal,
+                     children: [
+                       ..._expenseCategories.take(6).map((c) => Padding(
+                         padding: const EdgeInsets.only(right: 8),
+                         child: ActionChip(
+                           avatar: Text(c.emoji, style: const TextStyle(fontSize: 14)),
+                           label: Text(c.name, style: const TextStyle(fontSize: 12)),
+                           onPressed: () => setState(() => _filterCategory = c.name),
+                         ),
+                       )),
+                     ],
+                   ),
+                 ),
+               ],
+             ),
           ),
         ),
         SliverPadding(
