@@ -364,8 +364,16 @@ class _HomePageState extends State<HomePage> {
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   child: const Icon(Icons.add, color: Colors.white),
                 )
-              : null,
+               : null,
     );
+  }
+
+  Color _getBalanceColor(int backgroundColor) {
+    final brightness = ThemeData.estimateBrightnessForColor(Color(backgroundColor));
+    // 蓝绿色系：根据背景亮度自动调整
+    return brightness == Brightness.dark 
+        ? Colors.cyanAccent // 深色背景用亮青色
+        : const Color(0xFF006064); // 浅色背景用深青色
   }
 
   Widget _buildHome() {
@@ -862,14 +870,12 @@ class _HomePageState extends State<HomePage> {
                                           : Colors.black)),
                               const SizedBox(height: 4),
                               Text(
-                                '¥${a.balance.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: a.balance >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
+                                 '¥${a.balance.toStringAsFixed(2)}',
+                                 style: TextStyle(
+                                   fontSize: 14,
+                                   fontWeight: FontWeight.bold,
+                                   color: _getBalanceColor(a.color),
+                                 ),
                               ),
                             ],
                           ),
