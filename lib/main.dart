@@ -301,15 +301,32 @@ class _HomePageState extends State<HomePage> {
   void _addTransaction(Transaction tx) {
     setState(() {
       _transactions.insert(0, tx);
+      // 同步账户余额
+      final account = _accounts.firstWhere((a) => a.id == tx.accountId);
+      if (tx.isExpense) {
+        account.balance -= tx.amount;
+      } else {
+        account.balance += tx.amount;
+      }
     });
     _saveTransactions();
+    _saveAccounts();
   }
 
   void _deleteTransaction(String id) {
     setState(() {
+      final tx = _transactions.firstWhere((t) => t.id == id);
+      // 删除前先恢复账户余额
+      final account = _accounts.firstWhere((a) => a.id == tx.accountId);
+      if (tx.isExpense) {
+        account.balance += tx.amount; // 支出记录删除，余额增加
+      } else {
+        account.balance -= tx.amount; // 收入记录删除，余额减少
+      }
       _transactions.removeWhere((t) => t.id == id);
     });
     _saveTransactions();
+    _saveAccounts();
   }
 
   double get _balance => _transactions.fold(
