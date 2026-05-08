@@ -142,6 +142,7 @@ class _HomePageState extends State<HomePage> {
   List<Category> _expenseCategories = [];
   List<Category> _incomeCategories = [];
   List<Account> _accounts = [];
+  int _accountGridColumns = 3;
   int _currentIndex = 0;
   String _statsType = 'month';
   int _statsYear = DateTime.now().year;
@@ -259,13 +260,13 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton(
               onPressed: _showAddDialog,
-              backgroundColor: const Color(0xFF667eea),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               child: const Icon(Icons.add, color: Colors.white),
             )
           : _currentIndex == 2
               ? FloatingActionButton(
                   onPressed: _showAddAccountDialog,
-                  backgroundColor: const Color(0xFF667eea),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   child: const Icon(Icons.add, color: Colors.white),
                 )
               : null,
@@ -291,9 +292,12 @@ class _HomePageState extends State<HomePage> {
       slivers: [
         SliverToBoxAdapter(
           child: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -421,7 +425,7 @@ class _HomePageState extends State<HomePage> {
                         color: t.isExpense ? Colors.red : Colors.green,
                       ),
                     ),
-                    onTap: () => _deleteTransaction(t.id),
+                    onTap: () => _showTransactionDetail(t),
                   ),
                 );
               },
@@ -440,13 +444,16 @@ class _HomePageState extends State<HomePage> {
         slivers: [
           SliverToBoxAdapter(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.only(
+                borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(24),
                     bottomRight: Radius.circular(24)),
               ),
@@ -470,7 +477,7 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       _buildStatItem('收入', _getIncome(), Colors.green),
                       _buildStatItem('支出', _getExpense(), Colors.red),
-                      _buildStatItem('净收入', _getNet(), const Color(0xFF667eea)),
+                      _buildStatItem('净收入', _getNet(), Theme.of(context).colorScheme.primary),
                     ],
                   ),
                 ],
@@ -490,15 +497,41 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _gridColBtn(int n) {
+    final active = _accountGridColumns == n;
+    return GestureDetector(
+      onTap: () => setState(() => _accountGridColumns = n),
+      child: Container(
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: active ? Colors.white.withOpacity(0.25) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active
+                ? Colors.white
+                : Colors.white.withOpacity(0.4),
+          ),
+        ),
+        child: Text('${n}列',
+            style: TextStyle(
+                color: active ? Colors.white : Colors.white70, fontSize: 12)),
+      ),
+    );
+  }
+
   Widget _buildAccounts() {
     final totalAssets = _accounts.fold(0.0, (s, a) => s + a.balance);
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
           child: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -510,8 +543,20 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('总资产',
-                    style: TextStyle(color: Colors.white70, fontSize: 14)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('总资产',
+                        style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    Row(
+                      children: [
+                        _gridColBtn(2),
+                        _gridColBtn(3),
+                        _gridColBtn(4),
+                      ],
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 Text('¥${totalAssets.toStringAsFixed(2)}',
                     style: const TextStyle(
@@ -524,56 +569,80 @@ class _HomePageState extends State<HomePage> {
         ),
         SliverPadding(
           padding: const EdgeInsets.all(20),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                if (_accounts.isEmpty) {
-                  return const Center(
+          sliver: _accounts.isEmpty
+              ? SliverToBoxAdapter(
+                  child: Center(
                     child: Padding(
-                      padding: EdgeInsets.only(top: 60),
+                      padding: const EdgeInsets.only(top: 60),
                       child: Column(
                         children: [
-                          Text('🏦', style: TextStyle(fontSize: 48)),
-                          SizedBox(height: 12),
-                          Text('暂无账户\n点击下方＋添加',
+                          const Text('🏦', style: TextStyle(fontSize: 48)),
+                          const SizedBox(height: 12),
+                          const Text('暂无账户\n点击下方＋添加',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.grey)),
                         ],
                       ),
                     ),
-                  );
-                }
-                final a = _accounts[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Center(
-                          child: Text(a.emoji.isEmpty ? '🏦' : a.emoji,
-                              style: const TextStyle(fontSize: 20))),
-                    ),
-                    title: Text(a.name),
-                    subtitle: const Text('点击编辑余额'),
-                    trailing: Text(
-                      '¥${a.balance.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: a.balance >= 0 ? Colors.green : Colors.red,
-                      ),
-                    ),
-                    onTap: () => _showEditAccountDialog(a),
                   ),
-                );
-              },
-              childCount: _accounts.isEmpty ? 1 : _accounts.length,
-            ),
-          ),
+                )
+              : SliverGrid(
+                  gridDelegate:
+                      SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: _accountGridColumns,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.1,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final a = _accounts[index];
+                      return GestureDetector(
+                        onTap: () => _showEditAccountDialog(a),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.12),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(a.emoji.isEmpty ? '🏦' : a.emoji,
+                                  style: const TextStyle(fontSize: 32)),
+                              const SizedBox(height: 8),
+                              Text(a.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '¥${a.balance.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: a.balance >= 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: _accounts.length,
+                  ),
+                ),
         ),
       ],
     );
@@ -638,7 +707,7 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 16),
           _buildSingleChart(type, '支出趋势', true, Colors.red),
           const SizedBox(height: 16),
-          _buildSingleChart(type, '净收入趋势', null, const Color(0xFF667eea)),
+          _buildSingleChart(type, '净收入趋势', null, Theme.of(context).colorScheme.primary),
           const SizedBox(height: 24),
           const Text('支出分类',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -682,6 +751,8 @@ class _HomePageState extends State<HomePage> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        interval: type == 'month' ? 5 : 1,
+                        reservedSize: 22,
                         getTitlesWidget: (value, meta) {
                           if (type == 'month') {
                             return Text('${value.toInt()}日',
@@ -694,7 +765,16 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 42,
+                        getTitlesWidget: (value, meta) {
+                          if (value == 0) return const Text('');
+                          return Text('¥${value.toInt()}',
+                              style: const TextStyle(fontSize: 9));
+                        },
+                      ),
+                    ),
                     topTitles: AxisTitles(
                         sideTitles: SideTitles(showTitles: false)),
                     rightTitles: AxisTitles(
@@ -880,11 +960,11 @@ class _HomePageState extends State<HomePage> {
                           decoration: BoxDecoration(
                             border: Border.all(
                                 color: selectedCategory == c
-                                    ? const Color(0xFF667eea)
+                                    ? Theme.of(context).colorScheme.primary
                                     : Colors.grey[300]!),
                             borderRadius: BorderRadius.circular(12),
                             color: selectedCategory == c
-                                ? const Color(0xFF667eea).withOpacity(0.1)
+                                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
                                 : null,
                           ),
                           child: Column(
@@ -982,7 +1062,7 @@ class _HomePageState extends State<HomePage> {
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF667eea),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -1166,7 +1246,7 @@ class _HomePageState extends State<HomePage> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF667eea),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('导入'),
@@ -1303,13 +1383,45 @@ class _HomePageState extends State<HomePage> {
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF667eea),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('添加'),
           ),
         ],
       ),
+    );
+  }
+
+  static const _accountEmojis = [
+    '🏦', '💰', '💳', '🏧', '💵', '💴',
+    '💶', '💷', '🏠', '🚗', '🎓', '💼',
+    '📈', '🏪', '🌐', '🎮', '❤️', '⭐',
+  ];
+
+  Widget _buildEmojiPicker(TextEditingController ctrl) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: _accountEmojis.map((e) {
+        return GestureDetector(
+          onTap: () => ctrl.text = e,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: ctrl.text == e
+                  ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(10),
+              border: ctrl.text == e
+                  ? Border.all(color: Theme.of(context).colorScheme.primary)
+                  : null,
+            ),
+            child: Center(child: Text(e, style: const TextStyle(fontSize: 20))),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -1350,6 +1462,11 @@ class _HomePageState extends State<HomePage> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 12),
+            const Text('选择 Emoji',
+                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 6),
+            _buildEmojiPicker(emojiController),
           ],
         ),
         actions: [
@@ -1375,7 +1492,7 @@ class _HomePageState extends State<HomePage> {
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF667eea),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('添加'),
@@ -1386,21 +1503,49 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showEditAccountDialog(Account account) {
+    final nameController = TextEditingController(text: account.name);
+    final emojiController = TextEditingController(text: account.emoji);
     final balanceController = TextEditingController(
         text: account.balance.toStringAsFixed(2));
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${account.emoji} ${account.name}'),
-        content: TextField(
-          controller: balanceController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: '余额',
-            prefixText: '¥ ',
-            border: OutlineInputBorder(),
-          ),
+        title: const Text('编辑账户'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: '账户名称',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emojiController,
+              decoration: const InputDecoration(
+                labelText: 'Emoji（如 🏦）',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: balanceController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '余额',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text('选择 Emoji',
+                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 6),
+            _buildEmojiPicker(emojiController),
+          ],
         ),
         actions: [
           TextButton(
@@ -1409,19 +1554,109 @@ class _HomePageState extends State<HomePage> {
           ),
           ElevatedButton(
             onPressed: () {
+              final name = nameController.text.trim();
+              final emoji = emojiController.text.trim();
               final balance = double.tryParse(balanceController.text);
-              if (balance == null) return;
+              if (name.isEmpty || balance == null) return;
               setState(() {
+                account.name = name;
+                account.emoji = emoji.isEmpty ? '🏦' : emoji;
                 account.balance = balance;
                 _saveAccounts();
               });
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF667eea),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTransactionDetail(Transaction t) {
+    final account = _accounts.where((a) => a.id == t.accountId).firstOrNull;
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('记录详情',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(t.emoji.isEmpty ? '📦' : t.emoji,
+                    style: const TextStyle(fontSize: 48)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${t.isExpense ? '-' : '+'}¥${t.amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: t.isExpense ? Colors.red : Colors.green,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _detailRow('分类', t.category),
+            if (t.note.isNotEmpty) _detailRow('备注', t.note),
+            _detailRow('日期', DateFormat('yyyy-MM-dd HH:mm').format(t.date)),
+            _detailRow('账户', account != null ? '${account.emoji} ${account.name}' : '无'),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.delete_forever),
+                label: const Text('删除记录'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _deleteTransaction(t.id);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 60,
+            child: Text(label,
+                style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(fontSize: 14)),
           ),
         ],
       ),
