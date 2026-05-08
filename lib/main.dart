@@ -1089,109 +1089,107 @@ class _HomePageState extends State<HomePage> {
     final dayOfMonth = now.day;
     final remainingDays = daysInMonth - dayOfMonth + 1;
     
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            title: const Text('预算管理'),
-            floating: true,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings),
-                onPressed: _showAddBudgetDialog,
-              ),
-            ],
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.all(20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // 本月概览卡片
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: _budget != null 
-                          ? [
-                              Color(_budget!.color).withValues(alpha: 0.8),
-                              Color(_budget!.color),
-                            ]
-                          : [Colors.blue, Colors.blueAccent],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          title: const Text('预算管理'),
+          floating: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: _showAddBudgetDialog,
+            ),
+          ],
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(20),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              // 本月概览卡片
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _budget != null 
+                        ? [
+                            Color(_budget!.color).withValues(alpha: 0.8),
+                            Color(_budget!.color),
+                          ]
+                        : [Colors.blue, Colors.blueAccent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(_budget?.emoji ?? '💰', style: const TextStyle(fontSize: 32)),
+                        const SizedBox(width: 12),
+                        const Text('本月总预算', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(_budget != null ? '¥${_budget!.totalLimit.toStringAsFixed(2)}' : '未设置',
+                        style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    if (_budget != null) ...[
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(_budget?.emoji ?? '💰', style: const TextStyle(fontSize: 32)),
-                          const SizedBox(width: 12),
-                          const Text('本月总预算', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          Text('已花费: ¥${totalSpent.toStringAsFixed(2)}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                          Text('剩余: ¥${(_budget!.totalLimit - totalSpent).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                  color: _budget!.totalLimit - totalSpent >= 0 
+                                      ? Colors.white 
+                                      : Colors.redAccent, 
+                                  fontSize: 14, fontWeight: FontWeight.bold)),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(_budget != null ? '¥${_budget!.totalLimit.toStringAsFixed(2)}' : '未设置',
-                          style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        value: (totalSpent / _budget!.totalLimit).clamp(0.0, 1.0),
+                        backgroundColor: Colors.white.withValues(alpha: 0.3),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          totalSpent > _budget!.totalLimit * 0.8 ? Colors.red : Colors.white,
+                        ),
+                      ),
                       const SizedBox(height: 8),
-                      if (_budget != null) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('已花费: ¥${totalSpent.toStringAsFixed(2)}',
-                                style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                            Text('剩余: ¥${(_budget!.totalLimit - totalSpent).toStringAsFixed(2)}',
-                                style: TextStyle(
-                                    color: _budget!.totalLimit - totalSpent >= 0 
-                                        ? Colors.white 
-                                        : Colors.redAccent, 
-                                    fontSize: 14, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        LinearProgressIndicator(
-                          value: (totalSpent / _budget!.totalLimit).clamp(0.0, 1.0),
-                          backgroundColor: Colors.white.withValues(alpha: 0.3),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            totalSpent > _budget!.totalLimit * 0.8 ? Colors.red : Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('日均可用: ¥${remainingDays > 0 ? ((_budget!.totalLimit - totalSpent) / remainingDays).toStringAsFixed(2) : '0.00'}',
-                                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                            Text('剩余天数: $remainingDays天',
-                                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          ],
-                        ),
-                      ],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('日均可用: ¥${remainingDays > 0 ? ((_budget!.totalLimit - totalSpent) / remainingDays).toStringAsFixed(2) : '0.00'}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text('剩余天数: $remainingDays天',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                // 预算设置按钮
-                if (_budget == null)
-                  Center(
-                    child: ElevatedButton.icon(
-                      onPressed: _showAddBudgetDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('设置总预算'),
-                    ),
-                  )
-                else ...[
-                  const Text('预算详情', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  _buildBudgetDetailCard(totalSpent, remainingDays),
-                ],
-              ]),
-            ),
+              ),
+              const SizedBox(height: 20),
+              // 预算设置按钮
+              if (_budget == null)
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _showAddBudgetDialog,
+                    icon: const Icon(Icons.add),
+                    label: const Text('设置总预算'),
+                  ),
+                )
+              else ...[
+                const Text('预算详情', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                _buildBudgetDetailCard(totalSpent, remainingDays),
+              ],
+            ]),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
