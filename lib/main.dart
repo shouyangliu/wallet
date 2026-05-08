@@ -561,7 +561,7 @@ class _HomePageState extends State<HomePage> {
                     subtitle: const Text('点击编辑余额'),
                     trailing: Text(
                       '¥${a.balance.toStringAsFixed(2)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         color: a.balance >= 0 ? Colors.green : Colors.red,
