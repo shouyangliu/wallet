@@ -240,6 +240,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: IndexedStack(
         index: _currentIndex,
         children: [
@@ -885,29 +886,98 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildNumpad(TextEditingController ctrl, StateSetter setState) {
+    void onTap(String v) {
+      setState(() {
+        if (v == '⌫') {
+          if (ctrl.text.isNotEmpty) {
+            ctrl.text = ctrl.text.substring(0, ctrl.text.length - 1);
+          }
+        } else if (v == '.') {
+          if (!ctrl.text.contains('.')) {
+            ctrl.text = ctrl.text.isEmpty ? '0.' : '${ctrl.text}.';
+          }
+        } else {
+          if (ctrl.text == '0' && v != '.') {
+            ctrl.text = v;
+          } else {
+            ctrl.text += v;
+          }
+        }
+      });
+    }
+
+    final keys = [
+      ['7', '8', '9'],
+      ['4', '5', '6'],
+      ['1', '2', '3'],
+      ['.', '0', '⌫'],
+    ];
+
+    return Column(
+      children: keys.map((row) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: row.map((k) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () => onTap(k),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            k == '⌫' ? Colors.grey[200] : Colors.white,
+                        foregroundColor: Colors.black87,
+                        elevation: 1,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(k,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w500)),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   void _showAddDialog() {
     bool isExpense = true;
     final amountController = TextEditingController();
     final noteController = TextEditingController();
+    final noteFocus = FocusNode();
     Category? selectedCategory;
     String selectedAccountId = _accounts.isNotEmpty ? _accounts.first.id : '';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          final categories = isExpense ? _expenseCategories : _incomeCategories;
-          selectedCategory ??= categories.first;
+      builder: (ctx) => Builder(
+        builder: (ctx) {
+          final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+          return StatefulBuilder(
+            builder: (context, setState) {
+              final categories = isExpense ? _expenseCategories : _incomeCategories;
+              selectedCategory ??= categories.first;
 
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-              left: 24,
-              right: 24,
-              top: 24,
-            ),
-            child: Column(
+              return SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: bottomInset,
+                  left: 24,
+                  right: 24,
+                  top: 24,
+                ),
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
@@ -1020,26 +1090,42 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: '金额',
-                    prefixText: '¥ ',
-                    border: OutlineInputBorder(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  child: Row(
+                    children: [
+                      const Text('¥ ',
+                          style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey)),
+                      Text(
+                        amountController.text.isEmpty
+                            ? '0'
+                            : amountController.text,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: noteController,
+                  focusNode: noteFocus,
                   decoration: const InputDecoration(
                     labelText: '备注（可选）',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -1073,13 +1159,17 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                _buildNumpad(amountController, setState),
+                const SizedBox(height: 16),
               ],
             ),
           );
         },
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 
   void _showSettingsDialog() {
