@@ -8,6 +8,13 @@ import 'package:path_provider/path_provider.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
 final ValueNotifier<bool> darkModeNotifier = ValueNotifier(false);
+final ValueNotifier<double> saturationNotifier = ValueNotifier(1.0);
+
+Color adjustSaturation(Color base, double factor) {
+  final hsl = HSLColor.fromColor(base);
+  final s = (hsl.saturation * factor).clamp(0.0, 1.0);
+  return hsl.withSaturation(s).toColor();
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +23,8 @@ void main() async {
   if (saved != null) themeColorNotifier.value = saved;
   final dark = prefs.getBool('darkMode');
   if (dark != null) darkModeNotifier.value = dark;
+  final sat = prefs.getDouble('themeSaturation');
+  if (sat != null) saturationNotifier.value = sat;
   runApp(const MyApp());
 }
 
@@ -31,34 +40,48 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     themeColorNotifier.addListener(_onChanged);
     darkModeNotifier.addListener(_onChanged);
+    saturationNotifier.addListener(_onChanged);
   }
 
   @override
   void dispose() {
     themeColorNotifier.removeListener(_onChanged);
     darkModeNotifier.removeListener(_onChanged);
+    saturationNotifier.removeListener(_onChanged);
     super.dispose();
   }
 
   void _onChanged() => setState(() {});
 
+  ColorScheme _buildScheme(Color seed, Brightness brightness) {
+    final onPrimary =
+        ThemeData.estimateBrightnessForColor(seed) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+    return ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: brightness,
+    ).copyWith(primary: seed, onPrimary: onPrimary);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final seed = Color(themeColorNotifier.value);
+    final seed = adjustSaturation(
+        Color(themeColorNotifier.value), saturationNotifier.value);
     return MaterialApp(
       title: 'yl记账',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: seed),
+        colorScheme: _buildScheme(seed, Brightness.light),
         useMaterial3: true,
         brightness: Brightness.light,
       ),
       darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
+        colorScheme: _buildScheme(seed, Brightness.dark),
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
       themeMode: darkModeNotifier.value ? ThemeMode.dark : ThemeMode.light,
-      home: HomePage(),
+      home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -188,7 +211,6 @@ class _HomePageState extends State<HomePage> {
   List<Category> _expenseCategories = [];
   List<Category> _incomeCategories = [];
   List<Account> _accounts = [];
-  List<Budget> _budgets = [];
   int _accountGridColumns = 3;
   int _currentIndex = 0;
   String _statsType = 'month';
@@ -208,7 +230,6 @@ class _HomePageState extends State<HomePage> {
     final txJson = prefs.getString('transactions');
     final catJson = prefs.getString('categories');
     final acctJson = prefs.getString('accounts');
-    final budgetJson = prefs.getString('budgets');
 
     setState(() {
       if (txJson != null) {
@@ -248,11 +269,6 @@ class _HomePageState extends State<HomePage> {
         ];
         _saveAccounts();
       }
-      if (budgetJson != null) {
-        _budgets = (jsonDecode(budgetJson) as List)
-            .map((e) => Budget.fromJson(e))
-            .toList();
-      }
     });
   }
 
@@ -273,12 +289,6 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         'accounts', jsonEncode(_accounts.map((e) => e.toJson()).toList()));
-  }
-
-  Future<void> _saveBudgets() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'budgets', jsonEncode(_budgets.map((e) => e.toJson()).toList()));
   }
 
   void _addTransaction(Transaction tx) {
@@ -374,12 +384,12 @@ class _HomePageState extends State<HomePage> {
               gradient: LinearGradient(
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                  Theme.of(context).colorScheme.primary.withValues(alpha:0.7),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(24),
                   bottomRight: Radius.circular(24)),
             ),
@@ -411,7 +421,7 @@ class _HomePageState extends State<HomePage> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,7 +444,7 @@ class _HomePageState extends State<HomePage> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha:0.2),
                             borderRadius: BorderRadius.circular(12)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,7 +481,7 @@ class _HomePageState extends State<HomePage> {
                     contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
-                    fillColor: Colors.grey[100],
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
                   onChanged: (v) => setState(() => _searchQuery = v),
                 ),
@@ -529,16 +539,16 @@ class _HomePageState extends State<HomePage> {
               (context, index) {
                 final filtered = _filteredTransactions;
                 if (filtered.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.only(top: 60),
+                      padding: const EdgeInsets.only(top: 60),
                       child: Column(
                         children: [
-                          Text('📝', style: TextStyle(fontSize: 48)),
-                          SizedBox(height: 12),
+                          const Text('📝', style: TextStyle(fontSize: 48)),
+                          const SizedBox(height: 12),
                           Text('暂无记录\n点击下方＋添加',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey)),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         ],
                       ),
                     ),
@@ -556,7 +566,7 @@ class _HomePageState extends State<HomePage> {
                   flatItems.add(Padding(
                     padding: const EdgeInsets.only(top: 16, bottom: 8),
                     child: Text(_dateLabel(date),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey)),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ));
                   for (final t in grouped[key]!) {
                     flatItems.add(_buildTransactionCard(t));
@@ -635,7 +645,7 @@ class _HomePageState extends State<HomePage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10)),
             child: Center(
                 child: Text(t.emoji.isEmpty ? '📦' : t.emoji,
@@ -668,7 +678,7 @@ class _HomePageState extends State<HomePage> {
                 gradient: LinearGradient(
                   colors: [
                     Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                    Theme.of(context).colorScheme.primary.withValues(alpha:0.7),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -708,7 +718,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       Text(
                         _statsType == 'month'
-                            ? '${_statsYear}年${_statsMonth}月'
+                            ? '$_statsYear年$_statsMonth月'
                             : '$_statsYear年',
                         style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
@@ -759,15 +769,15 @@ class _HomePageState extends State<HomePage> {
         margin: const EdgeInsets.only(left: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: active ? Colors.white.withOpacity(0.25) : Colors.transparent,
+          color: active ? Colors.white.withValues(alpha:0.25) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: active
                 ? Colors.white
-                : Colors.white.withOpacity(0.4),
+                : Colors.white.withValues(alpha:0.4),
           ),
         ),
-        child: Text('${n}列',
+        child: Text('$n列',
             style: TextStyle(
                 color: active ? Colors.white : Colors.white70, fontSize: 12)),
       ),
@@ -784,12 +794,12 @@ class _HomePageState extends State<HomePage> {
               gradient: LinearGradient(
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                  Theme.of(context).colorScheme.primary.withValues(alpha:0.7),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(24),
                   bottomRight: Radius.circular(24)),
             ),
@@ -832,9 +842,9 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text('🏦', style: TextStyle(fontSize: 48)),
                           const SizedBox(height: 12),
-                          const Text('暂无账户\n点击下方＋添加',
+                          Text('暂无账户\n点击下方＋添加',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey)),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         ],
                       ),
                     ),
@@ -855,11 +865,11 @@ class _HomePageState extends State<HomePage> {
                         onTap: () => _showEditAccountDialog(a),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.surfaceContainer,
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.grey.withOpacity(0.12),
+                                color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.08),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2),
                               ),
@@ -906,7 +916,7 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha:0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -980,13 +990,13 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Column(
         children: [
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
         ],
@@ -1043,7 +1053,7 @@ class _HomePageState extends State<HomePage> {
               height: 160,
               child: LineChart(
                 LineChartData(
-                  gridData:
+                  gridData: const
                       FlGridData(show: true, drawVerticalLine: false),
                   titlesData: FlTitlesData(
                     bottomTitles: AxisTitles(
@@ -1073,9 +1083,9 @@ class _HomePageState extends State<HomePage> {
                         },
                       ),
                     ),
-                    topTitles: AxisTitles(
+                    topTitles: const AxisTitles(
                         sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: AxisTitles(
+                    rightTitles: const AxisTitles(
                         sideTitles: SideTitles(showTitles: false)),
                   ),
                   borderData: FlBorderData(show: false),
@@ -1144,7 +1154,7 @@ class _HomePageState extends State<HomePage> {
       dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) {
         return FlDotCirclePainter(radius: 1.5, color: color, strokeWidth: 0);
       }),
-      belowBarData: BarAreaData(show: true, color: color.withOpacity(0.1)),
+      belowBarData: BarAreaData(show: true, color: color.withValues(alpha:0.1)),
       dashArray: isExpense == null ? [5, 5] : null,
     );
   }
@@ -1157,8 +1167,8 @@ class _HomePageState extends State<HomePage> {
       categoryTotals[t.category] = (categoryTotals[t.category] ?? 0) + t.amount;
     }
     if (categoryTotals.isEmpty) {
-      return const Center(
-          child: Text('暂无数据', style: TextStyle(color: Colors.grey)));
+      return Center(
+          child: Text('暂无数据', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)));
     }
     final colors = [
       Colors.blue,
@@ -1228,9 +1238,10 @@ class _HomePageState extends State<HomePage> {
                     child: ElevatedButton(
                       onPressed: () => onTap(k),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            k == '⌫' ? Colors.grey[200] : Colors.white,
-                        foregroundColor: Colors.black87,
+                        backgroundColor: k == '⌫'
+                            ? Theme.of(context).colorScheme.surfaceContainerHigh
+                            : Theme.of(context).colorScheme.surfaceContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onSurface,
                         elevation: 1,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
@@ -1330,10 +1341,10 @@ class _HomePageState extends State<HomePage> {
                             border: Border.all(
                                 color: selectedCategory == c
                                     ? Theme.of(context).colorScheme.primary
-                                    : Colors.grey[300]!),
+                                    : Theme.of(context).colorScheme.outlineVariant),
                             borderRadius: BorderRadius.circular(12),
                             color: selectedCategory == c
-                                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha:0.1)
                                 : null,
                           ),
                           child: Column(
@@ -1345,7 +1356,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       );
-                    }).toList(),
+                    }),
                     GestureDetector(
                       onTap: () => _showAddCategoryDialog(isExpense, setState),
                       child: Container(
@@ -1353,17 +1364,17 @@ class _HomePageState extends State<HomePage> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           border: Border.all(
-                              color: Colors.grey[300]!,
+                              color: Theme.of(context).colorScheme.outlineVariant,
                               style: BorderStyle.solid),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Column(
+                        child: Column(
                           children: [
-                            Icon(Icons.add, size: 28, color: Colors.grey),
-                            SizedBox(height: 4),
+                            Icon(Icons.add, size: 28, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            const SizedBox(height: 4),
                             Text('自定义',
                                 style: TextStyle(
-                                    fontSize: 12, color: Colors.grey)),
+                                    fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                           ],
                         ),
                       ),
@@ -1393,16 +1404,16 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      const Text('¥ ',
+                      Text('¥ ',
                           style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey)),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       Text(
                         amountController.text.isEmpty
                             ? '0'
@@ -1433,7 +1444,9 @@ class _HomePageState extends State<HomePage> {
                           double.tryParse(amountController.text);
                       if (amount == null ||
                           amount <= 0 ||
-                          selectedCategory == null) return;
+                          selectedCategory == null) {
+                        return;
+                      }
                       if (edit != null) {
                         setState(() {
                           edit.amount = amount;
@@ -1460,7 +1473,7 @@ class _HomePageState extends State<HomePage> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
@@ -1500,95 +1513,128 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('设置'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('主题配色',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: presetColors.map((c) {
-                final selected = themeColorNotifier.value == c;
-                return GestureDetector(
-                  onTap: () async {
-                    themeColorNotifier.value = c;
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setInt('themeColor', c);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Color(c),
-                      borderRadius: BorderRadius.circular(12),
-                      border: selected
-                          ? Border.all(color: Colors.white, width: 3)
-                          : null,
-                      boxShadow: selected
-                          ? [
-                              BoxShadow(
-                                  color: Color(c).withOpacity(0.5),
-                                  blurRadius: 8)
-                            ]
-                          : null,
-                    ),
-                    child: selected
-                        ? const Icon(Icons.check, color: Colors.white)
-                        : null,
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        content: StatefulBuilder(
+          builder: (ctx, setSt) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('深色模式',
+                const Text('主题配色',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                Switch(
-                  value: darkModeNotifier.value,
-                  onChanged: (v) async {
-                    darkModeNotifier.value = v;
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('darkMode', v);
-                    if (ctx.mounted) Navigator.pop(ctx);
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: presetColors.map((c) {
+                    final selected = themeColorNotifier.value == c;
+                    final preview = adjustSaturation(
+                        Color(c), saturationNotifier.value);
+                    return GestureDetector(
+                      onTap: () async {
+                        themeColorNotifier.value = c;
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setInt('themeColor', c);
+                        setSt(() {});
+                      },
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: preview,
+                          borderRadius: BorderRadius.circular(12),
+                          border: selected
+                              ? Border.all(color: Colors.white, width: 3)
+                              : null,
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                      color: preview.withValues(alpha: 0.5),
+                                      blurRadius: 8)
+                                ]
+                              : null,
+                        ),
+                        child: selected
+                            ? const Icon(Icons.check, color: Colors.white)
+                            : null,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('饱和度',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('${(saturationNotifier.value * 100).round()}%',
+                        style: TextStyle(
+                            fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+                Slider(
+                  value: saturationNotifier.value,
+                  min: 0,
+                  max: 1.5,
+                  divisions: 30,
+                  label: '${(saturationNotifier.value * 100).round()}%',
+                  onChanged: (v) {
+                    saturationNotifier.value = v;
+                    setSt(() {});
                   },
+                  onChangeEnd: (v) async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setDouble('themeSaturation', v);
+                  },
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('深色模式',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Switch(
+                      value: darkModeNotifier.value,
+                      onChanged: (v) async {
+                        darkModeNotifier.value = v;
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('darkMode', v);
+                        setSt(() {});
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('数据管理',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.file_upload_outlined),
+                    label: const Text('导出 CSV'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _exportCsv();
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: const Text('导入 CSV'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _importCsv();
+                    },
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Divider(),
-            const SizedBox(height: 8),
-            const Text('数据管理',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                icon: const Icon(Icons.file_upload_outlined),
-                label: const Text('导出 CSV'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _exportCsv();
-                },
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                icon: const Icon(Icons.file_download_outlined),
-                label: const Text('导入 CSV'),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _importCsv();
-                },
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1641,8 +1687,8 @@ class _HomePageState extends State<HomePage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('请粘贴 CSV 内容（首行为表头）',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            Text('请粘贴 CSV 内容（首行为表头）',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
@@ -1664,7 +1710,7 @@ class _HomePageState extends State<HomePage> {
             onPressed: () => Navigator.pop(ctx, controller.text),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: const Text('导入'),
           ),
@@ -1801,7 +1847,7 @@ class _HomePageState extends State<HomePage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: const Text('添加'),
           ),
@@ -1828,8 +1874,8 @@ class _HomePageState extends State<HomePage> {
             height: 40,
             decoration: BoxDecoration(
               color: ctrl.text == e
-                  ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
-                  : Colors.grey[100],
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha:0.15)
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
               border: ctrl.text == e
                   ? Border.all(color: Theme.of(context).colorScheme.primary)
@@ -1880,8 +1926,8 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text('选择 Emoji',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            Text('选择 Emoji',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 6),
             _buildEmojiPicker(emojiController),
           ],
@@ -1910,7 +1956,7 @@ class _HomePageState extends State<HomePage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: const Text('添加'),
           ),
@@ -1958,8 +2004,8 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text('选择 Emoji',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            Text('选择 Emoji',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 6),
             _buildEmojiPicker(emojiController),
           ],
@@ -1985,7 +2031,7 @@ class _HomePageState extends State<HomePage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: const Text('保存'),
           ),
@@ -2047,7 +2093,7 @@ class _HomePageState extends State<HomePage> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -2088,7 +2134,7 @@ class _HomePageState extends State<HomePage> {
           SizedBox(
             width: 60,
             child: Text(label,
-                style: const TextStyle(color: Colors.grey, fontSize: 14)),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
           ),
           Expanded(
             child: Text(value,
