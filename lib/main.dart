@@ -405,8 +405,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBudgetCard() {
-    if (_budgets.isEmpty) return const SizedBox.shrink();
-    
     final now = DateTime.now();
     final monthKey = '${now.year}-${now.month}';
     
@@ -432,51 +430,66 @@ class _HomePageState extends State<HomePage> {
               Text('本月预算', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               TextButton(
                 onPressed: _showAddBudgetDialog,
-                child: const Text('设置', style: TextStyle(fontSize: 12)),
+                child: Text(_budgets.isEmpty ? '添加' : '设置', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          ..._budgets.map((budget) {
-            final spent = monthExpenses
-                .where((t) => t.category == budget.category)
-                .fold(0.0, (sum, t) => sum + t.amount);
-            final remaining = budget.limit - spent;
-            final percent = (spent / budget.limit).clamp(0.0, 1.0);
-            
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+          if (_budgets.isEmpty) ...[
+            const SizedBox(height: 12),
+            Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(budget.emoji, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(width: 8),
-                      Text(budget.category, style: const TextStyle(fontSize: 14)),
-                      const Spacer(),
-                      Text('¥${spent.toStringAsFixed(0)}/¥${budget.limit.toStringAsFixed(0)}',
-                          style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  LinearProgressIndicator(
-                    value: percent,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      percent > 0.8 ? Colors.red : Colors.green,
+                  const Text('📊', style: TextStyle(fontSize: 32)),
+                  const SizedBox(height: 8),
+                  Text('暂无预算\n点击右上角“添加”设置月预算', 
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            ..._budgets.map((budget) {
+              final spent = monthExpenses
+                  .where((t) => t.category == budget.category)
+                  .fold(0.0, (sum, t) => sum + t.amount);
+              final remaining = budget.limit - spent;
+              final percent = (spent / budget.limit).clamp(0.0, 1.0);
+              
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(budget.emoji, style: const TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Text(budget.category, style: const TextStyle(fontSize: 14)),
+                        const Spacer(),
+                        Text('¥${spent.toStringAsFixed(0)}/¥${budget.limit.toStringAsFixed(0)}',
+                            style: const TextStyle(fontSize: 12)),
+                      ],
                     ),
-                  ),
-                   if (remaining < 0)
-                     Text('已超支¥${(-remaining).toStringAsFixed(2)}',
-                         style: const TextStyle(fontSize: 12, color: Colors.red)),
-                 ],
-               ),
-             );
-           }),
-         ],
-       ),
-     );
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(
+                      value: percent,
+                      backgroundColor: Colors.grey[300],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        percent > 0.8 ? Colors.red : Colors.green,
+                      ),
+                    ),
+                    if (remaining < 0)
+                      Text('已超支¥${(-remaining).toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 12, color: Colors.red)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
   }
 
   void _showAddBudgetDialog() {
