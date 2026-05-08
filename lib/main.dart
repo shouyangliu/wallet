@@ -7,46 +7,72 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:path_provider/path_provider.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
+final ValueNotifier<bool> darkModeNotifier = ValueNotifier(false);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final saved = prefs.getInt('themeColor');
   if (saved != null) themeColorNotifier.value = saved;
+  final dark = prefs.getBool('darkMode');
+  if (dark != null) darkModeNotifier.value = dark;
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    themeColorNotifier.addListener(_onChanged);
+    darkModeNotifier.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    themeColorNotifier.removeListener(_onChanged);
+    darkModeNotifier.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: themeColorNotifier,
-      builder: (context, color, _) {
-        return MaterialApp(
-          title: 'yl记账',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Color(color)),
-            useMaterial3: true,
-          ),
-          home: const HomePage(),
-          debugShowCheckedModeBanner: false,
-        );
-      },
+    final seed = Color(themeColorNotifier.value);
+    return MaterialApp(
+      title: 'yl记账',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: seed),
+        useMaterial3: true,
+        brightness: Brightness.light,
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
+        useMaterial3: true,
+        brightness: Brightness.dark,
+      ),
+      themeMode: darkModeNotifier.value ? ThemeMode.dark : ThemeMode.light,
+      home: HomePage(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class Transaction {
   final String id;
-  final double amount;
-  final String category;
-  final String emoji;
-  final String note;
+  double amount;
+  String category;
+  String emoji;
+  String note;
   final DateTime date;
-  final bool isExpense;
-  final String accountId;
+  bool isExpense;
+  String accountId;
 
   Transaction({
     required this.id,
@@ -130,6 +156,26 @@ class Account {
   );
 }
 
+class Budget {
+  String category;
+  double limit;
+  String emoji;
+
+  Budget({required this.category, required this.limit, this.emoji = ''});
+
+  Map<String, dynamic> toJson() => {
+    'category': category,
+    'limit': limit,
+    'emoji': emoji,
+  };
+
+  factory Budget.fromJson(Map<String, dynamic> json) => Budget(
+    category: json['category'],
+    limit: (json['limit'] as num).toDouble(),
+    emoji: json['emoji'] ?? '',
+  );
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -142,11 +188,14 @@ class _HomePageState extends State<HomePage> {
   List<Category> _expenseCategories = [];
   List<Category> _incomeCategories = [];
   List<Account> _accounts = [];
+  List<Budget> _budgets = [];
   int _accountGridColumns = 3;
   int _currentIndex = 0;
   String _statsType = 'month';
   int _statsYear = DateTime.now().year;
   int _statsMonth = DateTime.now().month;
+  String _searchQuery = '';
+  String? _filterCategory;
 
   @override
   void initState() {
@@ -159,6 +208,7 @@ class _HomePageState extends State<HomePage> {
     final txJson = prefs.getString('transactions');
     final catJson = prefs.getString('categories');
     final acctJson = prefs.getString('accounts');
+    final budgetJson = prefs.getString('budgets');
 
     setState(() {
       if (txJson != null) {
@@ -198,6 +248,11 @@ class _HomePageState extends State<HomePage> {
         ];
         _saveAccounts();
       }
+      if (budgetJson != null) {
+        _budgets = (jsonDecode(budgetJson) as List)
+            .map((e) => Budget.fromJson(e))
+            .toList();
+      }
     });
   }
 
@@ -220,6 +275,12 @@ class _HomePageState extends State<HomePage> {
         'accounts', jsonEncode(_accounts.map((e) => e.toJson()).toList()));
   }
 
+  Future<void> _saveBudgets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'budgets', jsonEncode(_budgets.map((e) => e.toJson()).toList()));
+  }
+
   void _addTransaction(Transaction tx) {
     setState(() {
       _transactions.insert(0, tx);
@@ -235,7 +296,23 @@ class _HomePageState extends State<HomePage> {
   }
 
   double get _balance => _transactions.fold(
-      0, (s, t) => s + (t.isExpense ? -t.amount : t.amount));
+       0, (s, t) => s + (t.isExpense ? -t.amount : t.amount));
+
+  List<Transaction> get _filteredTransactions {
+    var list = _transactions;
+    if (_filterCategory != null) {
+      list = list.where((t) => t.category == _filterCategory).toList();
+    }
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      list = list.where((t) =>
+        t.category.toLowerCase().contains(q) ||
+        t.note.toLowerCase().contains(q) ||
+        t.amount.toString().contains(q)
+      ).toList();
+    }
+    return list;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -381,12 +458,77 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Column(
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: '搜索记录...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+                if (_searchQuery.isNotEmpty || _filterCategory != null) ...[
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        if (_filterCategory != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Chip(
+                              label: Text(_filterCategory!, style: const TextStyle(fontSize: 12)),
+                              deleteIcon: const Icon(Icons.close, size: 16),
+                              onDeleted: () => setState(() => _filterCategory = null),
+                            ),
+                          ),
+                        if (_searchQuery.isNotEmpty)
+                          TextButton.icon(
+                            icon: const Icon(Icons.clear, size: 16),
+                            label: const Text('清除搜索', style: TextStyle(fontSize: 12)),
+                            onPressed: () => setState(() { _searchQuery = ''; _filterCategory = null; }),
+                          ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ..._expenseCategories.take(6).map((c) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ActionChip(
+                            avatar: Text(c.emoji, style: const TextStyle(fontSize: 14)),
+                            label: Text(c.name, style: const TextStyle(fontSize: 12)),
+                            onPressed: () => setState(() => _filterCategory = c.name),
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
         SliverPadding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                if (_transactions.isEmpty) {
+                final filtered = _filteredTransactions;
+                if (filtered.isEmpty) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.only(top: 60),
@@ -402,39 +544,116 @@ class _HomePageState extends State<HomePage> {
                     ),
                   );
                 }
-                final t = _transactions[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Center(
-                          child: Text(t.emoji.isEmpty ? '📦' : t.emoji,
-                              style: const TextStyle(fontSize: 20))),
-                    ),
-                    title: Text(t.category),
-                    subtitle: Text(
-                        t.note.isEmpty ? DateFormat('yyyy-MM-dd').format(t.date) : t.note),
-                    trailing: Text(
-                      '${t.isExpense ? '-' : '+'}¥${t.amount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: t.isExpense ? Colors.red : Colors.green,
-                      ),
-                    ),
-                    onTap: () => _showTransactionDetail(t),
-                  ),
-                );
+                final grouped = <String, List<Transaction>>{};
+                for (final t in filtered) {
+                  final key = DateFormat('yyyy-MM-dd').format(t.date);
+                  (grouped[key] ??= []).add(t);
+                }
+                final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+                final flatItems = <Widget>[];
+                for (final key in sortedKeys) {
+                  final date = DateTime.parse(key);
+                  flatItems.add(Padding(
+                    padding: const EdgeInsets.only(top: 16, bottom: 8),
+                    child: Text(_dateLabel(date),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey)),
+                  ));
+                  for (final t in grouped[key]!) {
+                    flatItems.add(_buildTransactionCard(t));
+                  }
+                }
+                return flatItems[index];
               },
-              childCount: _transactions.isEmpty ? 1 : _transactions.length,
+              childCount: _filteredTransactions.isEmpty
+                  ? 1
+                  : (() {
+                      final grouped = <String, List<Transaction>>{};
+                      for (final t in _filteredTransactions) {
+                        final key = DateFormat('yyyy-MM-dd').format(t.date);
+                        (grouped[key] ??= []).add(t);
+                      }
+                      int count = 0;
+                      for (final txs in grouped.values) {
+                        count += 1 + txs.length;
+                      }
+                      return count;
+                    })(),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  String _dateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(d).inDays;
+    if (diff == 0) return '今天';
+    if (diff == 1) return '昨天';
+    if (diff == 2) return '前天';
+    const weekdays = ['', '一', '二', '三', '四', '五', '六', '日'];
+    return '${date.month}月${date.day}日 周${weekdays[date.weekday]}';
+  }
+
+  Widget _buildTransactionCard(Transaction t) {
+    return Dismissible(
+      key: ValueKey(t.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete_forever, color: Colors.white, size: 28),
+      ),
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('确认删除'),
+            content: Text('确定删除「${t.category} ${t.isExpense ? '-' : '+'}¥${t.amount.toStringAsFixed(2)}」？'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+        ) ?? false;
+      },
+      onDismissed: (_) => _deleteTransaction(t.id),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: ListTile(
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(10)),
+            child: Center(
+                child: Text(t.emoji.isEmpty ? '📦' : t.emoji,
+                    style: const TextStyle(fontSize: 20))),
+          ),
+          title: Text(t.category),
+          subtitle: Text(
+              t.note.isEmpty ? DateFormat('yyyy-MM-dd').format(t.date) : t.note),
+          trailing: Text(
+            '${t.isExpense ? '-' : '+'}¥${t.amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: t.isExpense ? Colors.red : Colors.green,
+            ),
+          ),
+          onTap: () => _showTransactionDetail(t),
+        ),
+      ),
     );
   }
 
@@ -472,7 +691,41 @@ class _HomePageState extends State<HomePage> {
                       Tab(text: '📆 按年'),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left, color: Colors.white),
+                        onPressed: () => setState(() {
+                          if (_statsType == 'month') {
+                            if (_statsMonth == 1) { _statsMonth = 12; _statsYear--; }
+                            else { _statsMonth--; }
+                          } else {
+                            _statsYear--;
+                          }
+                        }),
+                      ),
+                      Text(
+                        _statsType == 'month'
+                            ? '${_statsYear}年${_statsMonth}月'
+                            : '$_statsYear年',
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right, color: Colors.white),
+                        onPressed: () => setState(() {
+                          if (_statsType == 'month') {
+                            if (_statsMonth == 12) { _statsMonth = 1; _statsYear++; }
+                            else { _statsMonth++; }
+                          } else {
+                            _statsYear++;
+                          }
+                        }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -699,6 +952,48 @@ class _HomePageState extends State<HomePage> {
 
   double _getNet() => _getIncome() - _getExpense();
 
+  Widget _buildSummaryCards(String type) {
+    final txs = _transactions.where((t) {
+      if (type == 'month') {
+        return t.date.year == _statsYear && t.date.month == _statsMonth;
+      } else {
+        return t.date.year == _statsYear;
+      }
+    }).toList();
+    final expenses = txs.where((t) => t.isExpense);
+    final incomes = txs.where((t) => !t.isExpense);
+    final maxExpense = expenses.isEmpty ? 0.0 : expenses.fold(0.0, (s, t) => t.amount > s ? t.amount : s);
+    final maxIncome = incomes.isEmpty ? 0.0 : incomes.fold(0.0, (s, t) => t.amount > s ? t.amount : s);
+    final avgExpense = expenses.isEmpty ? 0.0 : expenses.fold(0.0, (s, t) => s + t.amount) / (type == 'month' ? DateTime(_statsYear, _statsMonth + 1, 0).day : 12);
+    return Row(
+      children: [
+        Expanded(child: _buildMiniStat('最高支出', '¥${maxExpense.toStringAsFixed(0)}', Colors.red)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildMiniStat('最高收入', '¥${maxIncome.toStringAsFixed(0)}', Colors.green)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildMiniStat('日均支出', '¥${avgExpense.toStringAsFixed(0)}', Colors.orange)),
+      ],
+    );
+  }
+
+  Widget _buildMiniStat(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildChartView(String type) {
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -709,6 +1004,8 @@ class _HomePageState extends State<HomePage> {
           _buildSingleChart(type, '支出趋势', true, Colors.red),
           const SizedBox(height: 16),
           _buildSingleChart(type, '净收入趋势', null, Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 16),
+          _buildSummaryCards(type),
           const SizedBox(height: 24),
           const Text('支出分类',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -844,6 +1141,9 @@ class _HomePageState extends State<HomePage> {
       isCurved: true,
       color: color,
       barWidth: 2,
+      dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) {
+        return FlDotCirclePainter(radius: 1.5, color: color, strokeWidth: 0);
+      }),
       belowBarData: BarAreaData(show: true, color: color.withOpacity(0.1)),
       dashArray: isExpense == null ? [5, 5] : null,
     );
@@ -951,39 +1251,38 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showAddDialog() {
-    bool isExpense = true;
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
+  void _showAddDialog([Transaction? edit]) {
+    bool isExpense = edit?.isExpense ?? true;
+    final amountController = TextEditingController(
+        text: edit != null ? edit.amount.toStringAsFixed(2) : '');
+    final noteController = TextEditingController(text: edit?.note ?? '');
     final noteFocus = FocusNode();
     Category? selectedCategory;
-    String selectedAccountId = _accounts.isNotEmpty ? _accounts.first.id : '';
+    if (edit != null) {
+      final cats = isExpense ? _expenseCategories : _incomeCategories;
+      selectedCategory = cats.where((c) => c.name == edit.category).firstOrNull;
+    }
+    String selectedAccountId = edit?.accountId ??
+        (_accounts.isNotEmpty ? _accounts.first.id : '');
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Builder(
-        builder: (ctx) {
-          final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
-          return StatefulBuilder(
-            builder: (context, setState) {
-              final categories = isExpense ? _expenseCategories : _incomeCategories;
-              selectedCategory ??= categories.first;
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            final categories = isExpense ? _expenseCategories : _incomeCategories;
+            selectedCategory ??= categories.first;
 
-              return SingleChildScrollView(
-                padding: EdgeInsets.only(
-                  bottom: bottomInset,
-                  left: 24,
-                  right: 24,
-                  top: 24,
-                ),
-                child: Column(
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
-                    const Text('添加记录',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(edit != null ? '编辑记录' : '添加记录',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     IconButton(
                         icon: const Icon(Icons.close),
@@ -1129,22 +1428,34 @@ class _HomePageState extends State<HomePage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                      onPressed: () {
                       final amount =
                           double.tryParse(amountController.text);
                       if (amount == null ||
                           amount <= 0 ||
                           selectedCategory == null) return;
-                      _addTransaction(Transaction(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        amount: amount,
-                        category: selectedCategory!.name,
-                        emoji: selectedCategory!.emoji,
-                        note: noteController.text,
-                        date: DateTime.now(),
-                        isExpense: isExpense,
-                        accountId: selectedAccountId,
-                      ));
+                      if (edit != null) {
+                        setState(() {
+                          edit.amount = amount;
+                          edit.category = selectedCategory!.name;
+                          edit.emoji = selectedCategory!.emoji;
+                          edit.note = noteController.text;
+                          edit.isExpense = isExpense;
+                          edit.accountId = selectedAccountId;
+                        });
+                        _saveTransactions();
+                      } else {
+                        _addTransaction(Transaction(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          amount: amount,
+                          category: selectedCategory!.name,
+                          emoji: selectedCategory!.emoji,
+                          note: noteController.text,
+                          date: DateTime.now(),
+                          isExpense: isExpense,
+                          accountId: selectedAccountId,
+                        ));
+                      }
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -1166,10 +1477,9 @@ class _HomePageState extends State<HomePage> {
             ),
           );
         },
-      );
-    },
-  ),
-);
+      ),
+    ),
+  );
   }
 
   void _showSettingsDialog() {
@@ -1234,6 +1544,23 @@ class _HomePageState extends State<HomePage> {
               }).toList(),
             ),
             const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('深色模式',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                Switch(
+                  value: darkModeNotifier.value,
+                  onChanged: (v) async {
+                    darkModeNotifier.value = v;
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('darkMode', v);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             const Divider(),
             const SizedBox(height: 8),
             const Text('数据管理',
@@ -1709,6 +2036,25 @@ class _HomePageState extends State<HomePage> {
             _detailRow('日期', DateFormat('yyyy-MM-dd HH:mm').format(t.date)),
             _detailRow('账户', account != null ? '${account.emoji} ${account.name}' : '无'),
             const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('编辑'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showAddDialog(t);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
