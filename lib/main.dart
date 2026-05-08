@@ -74,11 +74,13 @@ class _MyAppState extends State<MyApp> {
         colorScheme: _buildScheme(seed, Brightness.light),
         useMaterial3: true,
         brightness: Brightness.light,
+        fontFamily: 'Noto Sans SC',
       ),
       darkTheme: ThemeData(
         colorScheme: _buildScheme(seed, Brightness.dark),
         useMaterial3: true,
         brightness: Brightness.dark,
+        fontFamily: 'Noto Sans SC',
       ),
       themeMode: darkModeNotifier.value ? ThemeMode.dark : ThemeMode.light,
       home: const HomePage(),
