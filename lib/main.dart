@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -226,7 +227,7 @@ class _HomePageState extends State<HomePage> {
   String _statsType = 'month';
   int _statsYear = DateTime.now().year;
   int _statsMonth = DateTime.now().month;
-  String _searchQuery = '';
+  final String _searchQuery = '';
   String? _filterCategory;
 
   @override
@@ -367,130 +368,160 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildHome(),
-          _buildStats(),
-          _buildAccounts(),
-          _buildBudgetPage(),
-        ],
+    final scheme = Theme.of(context).colorScheme;
+    final topIsPrimary = _currentIndex != 3;
+    final topBg = topIsPrimary ? scheme.primary : scheme.surface;
+    final overlayStyle = ThemeData.estimateBrightnessForColor(topBg) ==
+            Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle.copyWith(
+        statusBarColor: Colors.transparent,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
-        selectedItemColor: Theme.of(context).colorScheme.primary,
-        unselectedItemColor: Theme.of(context).colorScheme.onSurfaceVariant,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: '首页'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: '统计'),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet), label: '账户'),
-          BottomNavigationBarItem(icon: Icon(Icons.pie_chart), label: '预算'),
-        ],
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildHome(),
+            _buildStats(),
+            _buildAccounts(),
+            _buildBudgetPage(),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (i) => setState(() => _currentIndex = i),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
+            NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: '统计'),
+            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: '账户'),
+            NavigationDestination(icon: Icon(Icons.pie_chart_outline), selectedIcon: Icon(Icons.pie_chart), label: '预算'),
+          ],
+        ),
+        floatingActionButton: _currentIndex == 0
+            ? FloatingActionButton(
+                onPressed: _showAddDialog,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: Icon(Icons.add, color: Theme.of(context).colorScheme.onPrimary),
+              )
+            : _currentIndex == 2
+                ? FloatingActionButton(
+                    onPressed: _showAddAccountDialog,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    child: Icon(Icons.add, color: Theme.of(context).colorScheme.onPrimary),
+                  )
+                : _currentIndex == 3
+                    ? FloatingActionButton(
+                        onPressed: _showAddBudgetDialog,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        child: Icon(Icons.add, color: Theme.of(context).colorScheme.onPrimary),
+                      )
+                    : null,
       ),
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(
-              onPressed: _showAddDialog,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : _currentIndex == 2
-              ? FloatingActionButton(
-                  onPressed: _showAddAccountDialog,
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  child: const Icon(Icons.add, color: Colors.white),
-                )
-              : _currentIndex == 3
-                  ? FloatingActionButton(
-                      onPressed: _showAddBudgetDialog,
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      child: const Icon(Icons.add, color: Colors.white),
-                    )
-                  : null,
     );
   }
 
-  Color _getBalanceColor(int backgroundColor) {
-    final brightness = ThemeData.estimateBrightnessForColor(Color(backgroundColor));
-    // 蓝绿色系：根据背景亮度自动调整
-    return brightness == Brightness.dark 
-        ? Colors.cyanAccent // 深色背景用亮青色
-        : const Color(0xFF006064); // 浅色背景用深青色
+  Color _onColor(int backgroundColor) {
+    return ThemeData.estimateBrightnessForColor(Color(backgroundColor)) ==
+            Brightness.dark
+        ? Colors.white
+        : Colors.black;
+  }
+
+  ({double totalSpent, int remainingDays, double dailyAvailable}) _computeBudget() {
+    final now = DateTime.now();
+    final totalSpent = _transactions
+        .where((t) =>
+            t.isExpense && t.date.year == now.year && t.date.month == now.month)
+        .fold(0.0, (s, t) => s + t.amount);
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final remainingDays = daysInMonth - now.day + 1;
+    final dailyAvailable = (_budget == null || remainingDays <= 0)
+        ? 0.0
+        : (_budget!.totalLimit - totalSpent) / remainingDays;
+    return (
+      totalSpent: totalSpent,
+      remainingDays: remainingDays,
+      dailyAvailable: dailyAvailable,
+    );
   }
 
   Widget _buildBudgetCard() {
-    // 计算本月总支出
-    final now = DateTime.now();
-    final monthExpenses = _transactions.where((t) => 
-        t.isExpense && 
-        t.date.year == now.year && 
-        t.date.month == now.month);
-    final totalSpent = monthExpenses.fold(0.0, (sum, t) => sum + t.amount);
-    
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('本月预算', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              TextButton(
-                onPressed: _showAddBudgetDialog,
-                child: Text(_budget == null ? '添加' : '设置', style: TextStyle(fontSize: 12)),
-              ),
-            ],
-          ),
-          if (_budget == null) ...[
-            const SizedBox(height: 12),
-            Center(
-              child: Column(
-                children: [
-                  const Text('📊', style: TextStyle(fontSize: 32)),
-                  const SizedBox(height: 8),
-                  Text('暂无预算\n点击右上角"添加"设置总预算', 
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                ],
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 8),
+    final stats = _computeBudget();
+    final totalSpent = stats.totalSpent;
+
+    return InkWell(
+      onTap: () => setState(() => _currentIndex = 3),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(_budget!.emoji, style: const TextStyle(fontSize: 16)),
-                const SizedBox(width: 8),
-                Text('总预算', style: const TextStyle(fontSize: 14)),
-                const Spacer(),
-                Text('¥${totalSpent.toStringAsFixed(0)}/¥${_budget!.totalLimit.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 12)),
+                const Text('本月预算', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Icon(Icons.chevron_right,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
               ],
             ),
-            const SizedBox(height: 4),
-            LinearProgressIndicator(
-              value: (totalSpent / _budget!.totalLimit).clamp(0.0, 1.0),
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                totalSpent > _budget!.totalLimit * 0.8 ? Colors.red : Colors.green,
+            if (_budget == null) ...[
+              const SizedBox(height: 8),
+              Text('点击设置本月总预算',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ] else ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(_budget!.emoji, style: const TextStyle(fontSize: 16)),
+                  const SizedBox(width: 8),
+                  Text(
+                    '¥${totalSpent.toStringAsFixed(0)} / ¥${_budget!.totalLimit.toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${((totalSpent / _budget!.totalLimit) * 100).clamp(0, 999).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: totalSpent > _budget!.totalLimit
+                            ? Colors.red
+                            : Theme.of(context).colorScheme.onSurface),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            if (totalSpent > _budget!.totalLimit)
-              Text('已超支¥${(totalSpent - _budget!.totalLimit).toStringAsFixed(2)}',
-                  style: const TextStyle(fontSize: 12, color: Colors.red)),
-            if (totalSpent <= _budget!.totalLimit)
-              Text('剩余¥${(_budget!.totalLimit - totalSpent).toStringAsFixed(2)} (日均¥${(_budget!.totalLimit - totalSpent) / DateTime(now.year, now.month + 1, 0).day > 0 ? (_budget!.totalLimit - totalSpent) / DateTime(now.year, now.month + 1, 0).day : 0})',
-                  style: const TextStyle(fontSize: 12, color: Colors.green)),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  minHeight: 6,
+                  value: (totalSpent / _budget!.totalLimit).clamp(0.0, 1.0),
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainer,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    totalSpent > _budget!.totalLimit
+                        ? Colors.red
+                        : totalSpent > _budget!.totalLimit * 0.8
+                            ? Colors.orange
+                            : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -587,7 +618,7 @@ class _HomePageState extends State<HomePage> {
               gradient: LinearGradient(
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withValues(alpha:0.7),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -612,11 +643,16 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text('¥${_balance.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 42,
-                        fontWeight: FontWeight.bold)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('¥${_balance.toStringAsFixed(2)}',
+                      maxLines: 1,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 42,
+                          fontWeight: FontWeight.bold)),
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -647,7 +683,7 @@ class _HomePageState extends State<HomePage> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,7 +883,7 @@ class _HomePageState extends State<HomePage> {
                 gradient: LinearGradient(
                   colors: [
                     Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.primary.withValues(alpha:0.7),
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -938,12 +974,12 @@ class _HomePageState extends State<HomePage> {
         margin: const EdgeInsets.only(left: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: active ? Colors.white.withValues(alpha:0.25) : Colors.transparent,
+          color: active ? Colors.white.withValues(alpha: 0.25) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: active
                 ? Colors.white
-                : Colors.white.withValues(alpha:0.4),
+                : Colors.white.withValues(alpha: 0.4),
           ),
         ),
         child: Text('$n列',
@@ -963,7 +999,7 @@ class _HomePageState extends State<HomePage> {
               gradient: LinearGradient(
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withValues(alpha:0.7),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -991,11 +1027,16 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text('¥${totalAssets.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 42,
-                        fontWeight: FontWeight.bold)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('¥${totalAssets.toStringAsFixed(2)}',
+                      maxLines: 1,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 42,
+                          fontWeight: FontWeight.bold)),
+                ),
               ],
             ),
           ),
@@ -1038,7 +1079,7 @@ class _HomePageState extends State<HomePage> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Theme.of(context).colorScheme.shadow.withValues(alpha:0.08),
+                                color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.08),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2),
                               ),
@@ -1057,16 +1098,14 @@ class _HomePageState extends State<HomePage> {
                                   style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
-                                      color: ThemeData.estimateBrightnessForColor(Color(a.color)) == Brightness.dark 
-                                          ? Colors.white 
-                                          : Colors.black)),
+                                      color: _onColor(a.color))),
                               const SizedBox(height: 4),
                               Text(
                                  '¥${a.balance.toStringAsFixed(2)}',
                                  style: TextStyle(
                                    fontSize: 14,
                                    fontWeight: FontWeight.bold,
-                                   color: _getBalanceColor(a.color),
+                                   color: _onColor(a.color),
                                  ),
                               ),
                             ],
@@ -1083,15 +1122,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBudgetPage() {
-    final now = DateTime.now();
-    final monthExpenses = _transactions.where((t) => 
-        t.isExpense && 
-        t.date.year == now.year && 
-        t.date.month == now.month);
-    final totalSpent = monthExpenses.fold(0.0, (sum, t) => sum + t.amount);
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
-    final dayOfMonth = now.day;
-    final remainingDays = daysInMonth - dayOfMonth + 1;
+    final stats = _computeBudget();
+    final totalSpent = stats.totalSpent;
+    final remainingDays = stats.remainingDays;
     
     return CustomScrollView(
       slivers: [
@@ -1222,7 +1255,7 @@ class _HomePageState extends State<HomePage> {
           const Divider(height: 16),
           _buildBudgetInfoRow('日均可用', '¥${dailyAvailable.toStringAsFixed(2)}', Colors.orange),
           const Divider(height: 16),
-          _buildBudgetInfoRow('剩余天数', '${remainingDays}天', Colors.purple),
+          _buildBudgetInfoRow('剩余天数', '$remainingDays天', Colors.purple),
         ],
       ),
     );
@@ -1242,7 +1275,7 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha:0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -1316,9 +1349,9 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha:0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -1480,7 +1513,7 @@ class _HomePageState extends State<HomePage> {
       dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) {
         return FlDotCirclePainter(radius: 1.5, color: color, strokeWidth: 0);
       }),
-      belowBarData: BarAreaData(show: true, color: color.withValues(alpha:0.1)),
+      belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.1)),
       dashArray: isExpense == null ? [5, 5] : null,
     );
   }
@@ -1670,7 +1703,7 @@ class _HomePageState extends State<HomePage> {
                                     : Theme.of(context).colorScheme.outlineVariant),
                             borderRadius: BorderRadius.circular(12),
                             color: selectedCategory == c
-                                ? Theme.of(context).colorScheme.primary.withValues(alpha:0.1)
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                                 : null,
                           ),
                           child: Column(
@@ -2200,7 +2233,7 @@ class _HomePageState extends State<HomePage> {
             height: 40,
             decoration: BoxDecoration(
               color: ctrl.text == e
-                  ? Theme.of(context).colorScheme.primary.withValues(alpha:0.15)
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                   : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
               border: ctrl.text == e
@@ -2232,7 +2265,7 @@ class _HomePageState extends State<HomePage> {
             decoration: BoxDecoration(
               color: Color(c),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             ),
           ),
         );
