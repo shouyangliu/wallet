@@ -1089,8 +1089,11 @@ class _HomePageState extends State<HomePage> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(a.emoji.isEmpty ? '🏦' : a.emoji,
-                                      style: const TextStyle(fontSize: 48)),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(a.emoji.isEmpty ? '🏦' : a.emoji,
+                                        style: const TextStyle(fontSize: 48)),
+                                  ),
                                   const SizedBox(height: 8),
                                   Text(a.name,
                                       maxLines: 1,
@@ -1100,12 +1103,15 @@ class _HomePageState extends State<HomePage> {
                                           fontWeight: FontWeight.w500,
                                           color: _onColor(a.color))),
                                   const SizedBox(height: 12),
-                                  Text(
-                                     '¥${a.balance.toStringAsFixed(2)}',
-                                     style: TextStyle(
-                                       fontSize: 18,
-                                       fontWeight: FontWeight.bold,
-                                       color: _onColor(a.color),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                       '¥${a.balance.toStringAsFixed(2)}',
+                                       style: TextStyle(
+                                         fontSize: 18,
+                                         fontWeight: FontWeight.bold,
+                                         color: _onColor(a.color),
+                                       ),
                                      ),
                                   ),
                                 ],
@@ -1687,7 +1693,8 @@ class _HomePageState extends State<HomePage> {
                   items: _accounts.map((a) {
                     return DropdownMenuItem(
                         value: a.id,
-                        child: Text('${a.emoji} ${a.name}'));
+                        child: Text('${a.emoji} ${a.name}',
+                            overflow: TextOverflow.ellipsis));
                   }).toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => selectedAccountId = v);
@@ -2310,49 +2317,53 @@ class _HomePageState extends State<HomePage> {
     final balanceController = TextEditingController();
     int selectedColor = 0xFF667eea;
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('添加账户'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: '账户名称',
-                border: OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '账户名称',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: emojiController,
-              decoration: const InputDecoration(
-                labelText: 'Emoji（如 🏦）',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emojiController,
+                decoration: const InputDecoration(
+                  labelText: 'Emoji（如 🏦）',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: balanceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: '余额',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+              TextField(
+                controller: balanceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: '余额',
+                  prefixText: '¥ ',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text('选择账户颜色',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            _buildColorPicker((color) => selectedColor = color),
-            const SizedBox(height: 12),
-            Text('选择 Emoji',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            _buildEmojiPicker(emojiController),
-          ],
+              const SizedBox(height: 12),
+              Text('选择账户颜色',
+                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              _buildColorPicker((color) => selectedColor = color),
+              const SizedBox(height: 12),
+              Text('选择 Emoji',
+                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              _buildEmojiPicker(emojiController),
+              SizedBox(height: bottomInset),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -2395,49 +2406,53 @@ class _HomePageState extends State<HomePage> {
         text: account.balance.toStringAsFixed(2));
     int selectedColor = account.color;
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('编辑账户'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: '账户名称',
-                border: OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '账户名称',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: emojiController,
-              decoration: const InputDecoration(
-                labelText: 'Emoji（如 🏦）',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emojiController,
+                decoration: const InputDecoration(
+                  labelText: 'Emoji（如 🏦）',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: balanceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: '余额',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+              TextField(
+                controller: balanceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: '余额',
+                  prefixText: '¥ ',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text('选择账户颜色',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            _buildColorPicker((color) => selectedColor = color),
-            const SizedBox(height: 12),
-            Text('选择 Emoji',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            _buildEmojiPicker(emojiController),
-          ],
+              const SizedBox(height: 12),
+              Text('选择账户颜色',
+                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              _buildColorPicker((color) => selectedColor = color),
+              const SizedBox(height: 12),
+              Text('选择 Emoji',
+                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              _buildEmojiPicker(emojiController),
+              SizedBox(height: bottomInset),
+            ],
+          ),
         ),
         actions: [
           TextButton(
