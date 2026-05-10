@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
 final ValueNotifier<bool> darkModeNotifier = ValueNotifier(false);
@@ -2028,13 +2030,22 @@ class _HomePageState extends State<HomePage> {
         _csvEscape(t.accountId),
       ].join(','));
     }
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/yl_wallet_${DateTime.now().millisecondsSinceEpoch}.csv');
-    await file.writeAsString(buffer.toString());
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已导出到: ${file.path}')),
+    
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final result = await FilePicker.platform.saveFile(
+      dialogTitle: '选择导出位置',
+      fileName: 'yl_wallet_$timestamp.csv',
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      bytes: utf8.encode(buffer.toString()),
     );
+    
+    if (!mounted) return;
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已导出到: $result')),
+      );
+    }
   }
 
   Future<void> _importCsv() async {
