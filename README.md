@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Flutter-3.7+-02569B?logo=flutter" alt="Flutter">
-  <img src="https://img.shields.io/badge/version-1.0.2-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
 </p>
 
@@ -27,6 +27,7 @@
 | 📊 **图表统计** | 饼图直观展示各类消费占比，帮你管好钱袋子 |
 | 🔍 **筛选搜索** | 按账户、类别、日期范围筛选，快速找到目标记录 |
 | 📂 **CSV 导入/导出** | 支持 CSV 格式备份数据，也可从其他应用迁移 |
+| ☁️ **云端同步** | 接入 Supabase，登录后数据自动同步，换机不丢数据 |
 | 🌙 **深色模式** | 支持明暗主题一键切换，夜间使用更舒适 |
 | 🎨 **自定义主题** | 自由选择主题色和饱和度，打造你的专属风格 |
 
@@ -68,6 +69,27 @@ flutter build web --release
 
 ---
 
+## ☁️ 启用云端同步
+
+应用默认纯本地运行，开箱即用。如需云端同步：
+
+1. 在 [supabase.com](https://supabase.com) 注册并创建项目
+2. 在 **SQL Editor** 中执行 [`supabase_setup.sql`](supabase_setup.sql) 建表
+3. 复制 `lib/config.example.dart` 为 `lib/config.dart`，填入你的 Supabase URL 和 anon key
+4. 将 `cloudEnabled` 改为 `true`
+
+```dart
+class AppConfig {
+  static const String supabaseUrl = 'https://你的项目.supabase.co';
+  static const String supabaseAnonKey = '你的anon-public-key';
+  static const bool cloudEnabled = true;
+}
+```
+
+> ⚠️ `config.dart` 已加入 `.gitignore`，不会提交到仓库
+
+---
+
 ## 🎯 使用场景
 
 - **日常记账** — 随手记下每笔开销，月底看看钱都花哪了
@@ -84,6 +106,7 @@ flutter build web --release
 | **框架** | [Flutter](https://flutter.dev) — 跨平台 UI 框架 |
 | **语言** | [Dart](https://dart.dev) |
 | **本地存储** | [shared_preferences](https://pub.dev/packages/shared_preferences) |
+| **云端数据库** | [Supabase](https://supabase.com) + [supabase_flutter](https://pub.dev/packages/supabase_flutter) |
 | **图表** | [fl_chart](https://pub.dev/packages/fl_chart) |
 | **日期处理** | [intl](https://pub.dev/packages/intl) |
 | **文件选择** | [file_picker](https://pub.dev/packages/file_picker) |
@@ -94,11 +117,19 @@ flutter build web --release
 
 ```
 lib/
-├── main.dart              # 主入口 & 全部 UI 逻辑
-pubspec.yaml               # 项目配置
+├── main.dart                   # 主入口 & 全部 UI 逻辑
+├── config.dart                 # Supabase 配置（已 gitignore）
+├── config.example.dart         # 配置模板
+├── models/
+│   ├── account.dart            # 账户模型
+│   ├── transaction.dart        # 交易记录模型
+│   ├── category.dart           # 分类模型
+│   └── budget.dart             # 预算模型
+├── services/
+│   └── database_service.dart   # 数据服务（本地 + 云端自动同步）
+└── pages/
+    └── auth_page.dart          # 登录/注册页面
 ```
-
-> 整个应用核心代码集中在 `main.dart` 中，简约而不简单。 🎯
 
 ---
 
