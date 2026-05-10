@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'models/account.dart';
 import 'models/transaction.dart';
 import 'models/category.dart';
@@ -1848,6 +1849,28 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 12),
             Text('微信扫一扫', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.payment),
+                label: const Text('支付宝打赏'),
+                onPressed: () async {
+                  final uri = Uri.parse(
+                      'alipays://platformapi/startapp?saId=10000007&userName=15996162784');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('请先安装支付宝')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
           ],
         ),
         actions: [
