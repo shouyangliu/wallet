@@ -1,12 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
@@ -1068,7 +1065,7 @@ class _HomePageState extends State<HomePage> {
                     crossAxisCount: _accountGridColumns,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 1.1,
+                    childAspectRatio: _accountGridColumns == 2 ? 1.5 : (_accountGridColumns == 3 ? 1.0 : 0.8),
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -1087,31 +1084,33 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ],
                           ),
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(a.emoji.isEmpty ? '🏦' : a.emoji,
-                                  style: const TextStyle(fontSize: 32)),
-                              const SizedBox(height: 8),
-                              Text(a.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: _onColor(a.color))),
-                              const SizedBox(height: 4),
-                              Text(
-                                 '¥${a.balance.toStringAsFixed(2)}',
-                                 style: TextStyle(
-                                   fontSize: 14,
-                                   fontWeight: FontWeight.bold,
-                                   color: _onColor(a.color),
-                                 ),
+                            padding: const EdgeInsets.all(12),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(a.emoji.isEmpty ? '🏦' : a.emoji,
+                                      style: const TextStyle(fontSize: 48)),
+                                  const SizedBox(height: 8),
+                                  Text(a.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: _onColor(a.color))),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                     '¥${a.balance.toStringAsFixed(2)}',
+                                     style: TextStyle(
+                                       fontSize: 18,
+                                       fontWeight: FontWeight.bold,
+                                       color: _onColor(a.color),
+                                     ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
                         ),
                       );
                     },
@@ -1557,72 +1556,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildNumpad(TextEditingController ctrl, StateSetter setState) {
-    void onTap(String v) {
-      setState(() {
-        if (v == '⌫') {
-          if (ctrl.text.isNotEmpty) {
-            ctrl.text = ctrl.text.substring(0, ctrl.text.length - 1);
-          }
-        } else if (v == '.') {
-          if (!ctrl.text.contains('.')) {
-            ctrl.text = ctrl.text.isEmpty ? '0.' : '${ctrl.text}.';
-          }
-        } else {
-          if (ctrl.text == '0' && v != '.') {
-            ctrl.text = v;
-          } else {
-            ctrl.text += v;
-          }
-        }
-      });
-    }
-
-    final keys = [
-      ['7', '8', '9'],
-      ['4', '5', '6'],
-      ['1', '2', '3'],
-      ['.', '0', '⌫'],
-    ];
-
-    return Column(
-      children: keys.map((row) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: row.map((k) {
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () => onTap(k),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: k == '⌫'
-                            ? Theme.of(context).colorScheme.surfaceContainerHigh
-                            : Theme.of(context).colorScheme.surfaceContainer,
-                        foregroundColor: Theme.of(context).colorScheme.onSurface,
-                        elevation: 1,
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(k,
-                          style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w500)),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   void _showAddDialog([Transaction? edit]) {
     bool isExpense = edit?.isExpense ?? true;
     final amountController = TextEditingController(
@@ -1761,31 +1694,23 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
                   ),
-                  child: Row(
-                    children: [
-                      Text('¥ ',
-                          style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                      Text(
-                        amountController.text.isEmpty
-                            ? '0'
-                            : amountController.text,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  decoration: InputDecoration(
+                    prefix: Text('¥ ',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    hintText: '0',
+                    border: InputBorder.none,
                   ),
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1844,9 +1769,6 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                const SizedBox(height: 16),
-                _buildNumpad(amountController, setState),
-                const SizedBox(height: 16),
               ],
             ),
           );
@@ -2009,26 +1931,48 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _exportCsv() async {
-    if (_transactions.isEmpty) {
+    final buffer = StringBuffer();
+    
+    // 导出账户信息
+    if (_accounts.isNotEmpty) {
+      buffer.writeln('#ACCOUNTS');
+      buffer.writeln('id,name,emoji,balance,color');
+      for (final a in _accounts) {
+        buffer.writeln([
+          _csvEscape(a.id),
+          _csvEscape(a.name),
+          _csvEscape(a.emoji),
+          a.balance.toStringAsFixed(2),
+          a.color.toString(),
+        ].join(','));
+      }
+      buffer.writeln();
+    }
+    
+    // 导出交易记录
+    if (_transactions.isNotEmpty) {
+      buffer.writeln('#TRANSACTIONS');
+      buffer.writeln('id,amount,category,emoji,note,date,isExpense,accountId');
+      for (final t in _transactions) {
+        buffer.writeln([
+          _csvEscape(t.id),
+          t.amount.toStringAsFixed(2),
+          _csvEscape(t.category),
+          _csvEscape(t.emoji),
+          _csvEscape(t.note),
+          _csvEscape(t.date.toIso8601String()),
+          t.isExpense.toString(),
+          _csvEscape(t.accountId),
+        ].join(','));
+      }
+    }
+    
+    if (buffer.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('暂无数据可导出')),
       );
       return;
-    }
-    final buffer = StringBuffer();
-    buffer.writeln('id,amount,category,emoji,note,date,isExpense,accountId');
-    for (final t in _transactions) {
-      buffer.writeln([
-        _csvEscape(t.id),
-        t.amount.toStringAsFixed(2),
-        _csvEscape(t.category),
-        _csvEscape(t.emoji),
-        _csvEscape(t.note),
-        _csvEscape(t.date.toIso8601String()),
-        t.isExpense.toString(),
-        _csvEscape(t.accountId),
-      ].join(','));
     }
     
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
@@ -2097,49 +2041,75 @@ class _HomePageState extends State<HomePage> {
       if (csvContent == null) return;
     }
     
-    final lines = csvContent.trim().split('\n');
-    if (lines.length < 2) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('CSV 格式错误：缺少数据行')),
-      );
-      return;
-    }
-    int imported = 0, skipped = 0;
-    final existingIds = _transactions.map((t) => t.id).toSet();
-    for (int i = 1; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) continue;
-      final cols = _parseCsvLine(line);
-      if (cols.length < 7) continue;
-      final id = cols[0];
-      if (existingIds.contains(id)) {
-        skipped++;
-        continue;
-      }
-      final amount = double.tryParse(cols[1]);
-      if (amount == null) continue;
-      final date = DateTime.tryParse(cols[5]);
-      if (date == null) continue;
-      _transactions.add(Transaction(
-        id: id,
-        amount: amount,
-        category: cols[2],
-        emoji: cols.length > 3 ? cols[3] : '',
-        note: cols.length > 4 ? cols[4] : '',
-        date: date,
-        isExpense: cols[6].toLowerCase() == 'true',
-        accountId: cols.length > 7 ? cols[7] : '',
-      ));
-      imported++;
-    }
-    setState(() {});
-    _saveTransactions();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('导入完成：新增 $imported 条，跳过 $skipped 条（已存在）')),
-    );
-  }
+    int accountsImported = 0;
+    int transactionsImported = 0;
+    int transactionsSkipped = 0;
+    
+    final sections = csvContent.split('\n\n');
+    final existingAccountIds = _accounts.map((a) => a.id).toSet();
+    final existingTransactionIds = _transactions.map((t) => t.id).toSet();
+    
+    for (final section in sections) {
+      final lines = section.trim().split('\n');
+      if (lines.isEmpty) continue;
+      
+      if (lines.first == '#ACCOUNTS') {
+        // 导入账户
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trim();
+          if (line.isEmpty) continue;
+          final cols = _parseCsvLine(line);
+          if (cols.length < 4) continue;
+          final id = cols[0];
+          if (existingAccountIds.contains(id)) continue;
+          _accounts.add(Account(
+            id: id,
+            name: cols[1],
+            emoji: cols.length > 2 ? cols[2] : '🏦',
+            balance: double.tryParse(cols[3]) ?? 0,
+            color: cols.length > 4 ? int.tryParse(cols[4]) ?? 0xFF667eea : 0xFF667eea,
+          ));
+          existingAccountIds.add(id);
+          accountsImported++;
+        }
+      } else if (lines.first == '#TRANSACTIONS') {
+        // 导入交易
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trim();
+          if (line.isEmpty) continue;
+          final cols = _parseCsvLine(line);
+          if (cols.length < 7) continue;
+          final id = cols[0];
+          if (existingTransactionIds.contains(id)) {
+            transactionsSkipped++;
+            continue;
+          }
+          final amount = double.tryParse(cols[1]);
+          if (amount == null) continue;
+          final date = DateTime.tryParse(cols[5]);
+          if (date == null) continue;
+          _transactions.add(Transaction(
+            id: id,
+            amount: amount,
+            category: cols[2],
+            emoji: cols.length > 3 ? cols[3] : '',
+             note: cols.length > 4 ? cols[4] : '',
+             date: date,
+             isExpense: cols[6].toLowerCase() == 'true',
+             accountId: cols.length > 7 ? cols[7] : '',
+           ));
+           transactionsImported++;
+         }
+       }
+     }
+     setState(() {});
+     _saveTransactions();
+     _saveAccounts();
+     if (!mounted) return;
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content: Text('导入完成：账户 $accountsImported 个，交易 $transactionsImported 条，跳过 $transactionsSkipped 条（已存在）')),
+     );
+   }
 
   Future<String?> _showPasteDialog() async {
     final controller = TextEditingController();
