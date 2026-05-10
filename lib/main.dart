@@ -1804,10 +1804,58 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.favorite_outline, color: Colors.redAccent),
+                    label: const Text('打赏支持',
+                        style: TextStyle(color: Colors.redAccent)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showDonateDialog();
+                    },
+                  ),
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showDonateDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('打赏支持'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('如果这个应用对你有帮助，欢迎打赏一杯咖啡 ☕', textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/mm_facetoface_collect_qrcode_1778429391872.png',
+                width: 250,
+                height: 250,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('微信扫一扫', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
       ),
     );
   }
