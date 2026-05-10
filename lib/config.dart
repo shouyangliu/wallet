@@ -6,10 +6,10 @@
 /// 3. 将项目 URL 和 anon key 填入下方
 /// 4. 将 cloudEnabled 改为 true
 class AppConfig {
-  static const String supabaseUrl = 'https://your-project.supabase.co';
+  static const String supabaseUrl = 'https://jbevbvdmgpjxhyxnsgyd.supabase.co';
   static const String supabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvdXItcHJvamVjdCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNjk2MDAwMDAwLCJleHAiOjE2OTE1OTAwMDB9.example';
+      'sb_publishable_JdiL5aQsLLmxpOAZakPzYQ_ZpY-Li6_';
 
   /// 设为 true 启用云端同步
-  static const bool cloudEnabled = false;
+  static const bool cloudEnabled = true;
 }
