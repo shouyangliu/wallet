@@ -2091,7 +2091,7 @@ class _HomePageState extends State<HomePage> {
         withData: true,
       );
       if (result == null || result.files.isEmpty) return;
-      csvContent = String.fromCharCodes(result.files.first.bytes!);
+      csvContent = utf8.decode(result.files.first.bytes!);
     } else {
       csvContent = await _showPasteDialog();
       if (csvContent == null) return;
