@@ -117,7 +117,7 @@ class DatabaseService extends ChangeNotifier {
           .from('accounts')
           .select()
           .eq('user_id', uid);
-      if (acctRes.isNotEmpty && accounts.isEmpty) {
+      if (acctRes.isNotEmpty) {
         accounts =
             acctRes.map((e) => Account.fromJson(e)).toList().cast<Account>();
       }
@@ -126,7 +126,7 @@ class DatabaseService extends ChangeNotifier {
           .from('transactions')
           .select()
           .eq('user_id', uid);
-      if (txRes.isNotEmpty && transactions.isEmpty) {
+      if (txRes.isNotEmpty) {
         transactions = txRes
             .map((e) => Transaction.fromJson(e))
             .toList()
@@ -144,11 +144,25 @@ class DatabaseService extends ChangeNotifier {
         incomeCategories = cats.where((c) => !c.isExpense).toList();
       }
 
+      await _saveAllLocal();
       _status = SyncStatus.cloud;
       notifyListeners();
     } catch (e) {
       _status = SyncStatus.cloud;
       notifyListeners();
+    }
+  }
+
+  Future<void> _saveAllLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'transactions', jsonEncode(transactions.map((e) => e.toJson()).toList()));
+    await prefs.setString(
+        'accounts', jsonEncode(accounts.map((e) => e.toJson()).toList()));
+    final all = [...expenseCategories, ...incomeCategories];
+    await prefs.setString('categories', jsonEncode(all.map((e) => e.toJson()).toList()));
+    if (budget != null) {
+      await prefs.setString('budgets', jsonEncode([budget!.toJson()]));
     }
   }
 
@@ -202,8 +216,9 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
-  Future<void> uploadLocalData() async {
+  Future<void> syncAfterLogin() async {
     if (!isCloud) return;
+    await _syncFromCloud();
     await saveAccounts();
     await saveTransactions();
     await saveCategories();

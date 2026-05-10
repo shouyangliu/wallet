@@ -1825,7 +1825,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('上传本地数据'),
               subtitle: const Text('将本地数据同步到云端'),
               onTap: () async {
-                await DatabaseService.instance.uploadLocalData();
+                await DatabaseService.instance.syncAfterLogin();
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(

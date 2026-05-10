@@ -30,7 +30,7 @@ class _AuthPageState extends State<AuthPage> {
     try {
       if (_isLogin) {
         await DatabaseService.instance.signIn(email, password);
-        await DatabaseService.instance.uploadLocalData();
+        await DatabaseService.instance.syncAfterLogin();
       } else {
         await DatabaseService.instance.signUp(email, password);
         if (mounted) {
