@@ -1065,7 +1065,7 @@ class _HomePageState extends State<HomePage> {
                     crossAxisCount: _accountGridColumns,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: _accountGridColumns == 2 ? 1.5 : (_accountGridColumns == 3 ? 1.0 : 0.8),
+                    childAspectRatio: _accountGridColumns == 2 ? 0.75 : (_accountGridColumns == 3 ? 0.75 : 0.7),
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -1085,34 +1085,37 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                             padding: const EdgeInsets.all(12),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(a.emoji.isEmpty ? '🏦' : a.emoji,
-                                      style: const TextStyle(fontSize: 48)),
-                                  const SizedBox(height: 8),
-                                  Text(a.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                          color: _onColor(a.color))),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                     '¥${a.balance.toStringAsFixed(2)}',
-                                     textAlign: TextAlign.center,
-                                     style: TextStyle(
-                                       fontSize: 18,
-                                       fontWeight: FontWeight.bold,
-                                       color: _onColor(a.color),
-                                     ),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: Center(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(a.emoji.isEmpty ? '🏦' : a.emoji,
+                                          style: const TextStyle(fontSize: 48)),
+                                    ),
                                   ),
-                                ],
-                              ),
+                                ),
+                                Text(a.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: _onColor(a.color))),
+                                const SizedBox(height: 4),
+                                Text(
+                                   '¥${a.balance.toStringAsFixed(2)}',
+                                   textAlign: TextAlign.center,
+                                   overflow: TextOverflow.ellipsis,
+                                   style: TextStyle(
+                                     fontSize: 14,
+                                     fontWeight: FontWeight.bold,
+                                     color: _onColor(a.color),
+                                   ),
+                                ),
+                              ],
                             ),
                         ),
                       );
