@@ -1085,33 +1085,30 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                             padding: const EdgeInsets.all(12),
-                            child: Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(a.emoji.isEmpty ? '🏦' : a.emoji,
-                                        style: const TextStyle(fontSize: 48)),
-                                  ),
+                                  Text(a.emoji.isEmpty ? '🏦' : a.emoji,
+                                      style: const TextStyle(fontSize: 48)),
                                   const SizedBox(height: 8),
                                   Text(a.name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w500,
                                           color: _onColor(a.color))),
                                   const SizedBox(height: 12),
-                                  FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                       '¥${a.balance.toStringAsFixed(2)}',
-                                       style: TextStyle(
-                                         fontSize: 18,
-                                         fontWeight: FontWeight.bold,
-                                         color: _onColor(a.color),
-                                       ),
+                                  Text(
+                                     '¥${a.balance.toStringAsFixed(2)}',
+                                     textAlign: TextAlign.center,
+                                     style: TextStyle(
+                                       fontSize: 18,
+                                       fontWeight: FontWeight.bold,
+                                       color: _onColor(a.color),
                                      ),
                                   ),
                                 ],
