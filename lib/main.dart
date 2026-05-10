@@ -5,6 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:file_picker/file_picker.dart';
+import 'models/account.dart';
+import 'models/transaction.dart';
+import 'models/category.dart';
+import 'models/budget.dart';
+import 'config.dart';
+import 'services/database_service.dart';
+import 'pages/auth_page.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
 final ValueNotifier<bool> darkModeNotifier = ValueNotifier(false);
@@ -25,6 +32,7 @@ void main() async {
   if (dark != null) darkModeNotifier.value = dark;
   final sat = prefs.getDouble('themeSaturation');
   if (sat != null) saturationNotifier.value = sat;
+  await DatabaseService.instance.init();
   runApp(const MyApp());
 }
 
@@ -89,125 +97,6 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class Transaction {
-  final String id;
-  double amount;
-  String category;
-  String emoji;
-  String note;
-  final DateTime date;
-  bool isExpense;
-  String accountId;
-
-  Transaction({
-    required this.id,
-    required this.amount,
-    required this.category,
-    this.emoji = '',
-    this.note = '',
-    required this.date,
-    required this.isExpense,
-    this.accountId = '',
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'amount': amount,
-    'category': category,
-    'emoji': emoji,
-    'note': note,
-    'date': date.toIso8601String(),
-    'isExpense': isExpense,
-    'accountId': accountId,
-  };
-
-  factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
-    id: json['id'],
-    amount: json['amount'],
-    category: json['category'],
-    emoji: json['emoji'] ?? '',
-    note: json['note'] ?? '',
-    date: DateTime.parse(json['date']),
-    isExpense: json['isExpense'],
-    accountId: json['accountId'] ?? '',
-  );
-}
-
-class Category {
-  final String name;
-  final String emoji;
-  final bool isExpense;
-  int color;
-
-  Category({required this.name, this.emoji = '', required this.isExpense, this.color = 0xFF667eea});
-
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'emoji': emoji,
-    'isExpense': isExpense,
-    'color': color,
-  };
-
-  factory Category.fromJson(Map<String, dynamic> json) => Category(
-    name: json['name'],
-    emoji: json['emoji'] ?? '',
-    isExpense: json['isExpense'],
-    color: json['color'] ?? 0xFF667eea,
-  );
-}
-
-class Account {
-  final String id;
-  String name;
-  String emoji;
-  double balance;
-  int color;
-
-  Account({
-    required this.id,
-    required this.name,
-    this.emoji = '🏦',
-    this.balance = 0,
-    this.color = 0xFF667eea,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'emoji': emoji,
-    'balance': balance,
-    'color': color,
-  };
-
-  factory Account.fromJson(Map<String, dynamic> json) => Account(
-    id: json['id'],
-    name: json['name'],
-    emoji: json['emoji'] ?? '🏦',
-    balance: (json['balance'] as num?)?.toDouble() ?? 0,
-    color: json['color'] ?? 0xFF667eea,
-  );
-}
-
-class Budget {
-  double totalLimit;  // 总预算
-  String emoji;
-  int color;
-
-  Budget({required this.totalLimit, this.emoji = '💰', this.color = 0xFF667eea});
-
-  Map<String, dynamic> toJson() => {
-    'totalLimit': totalLimit,
-    'emoji': emoji,
-    'color': color,
-  };
-
-  factory Budget.fromJson(Map<String, dynamic> json) => Budget(
-    totalLimit: (json['totalLimit'] as num).toDouble(),
-    emoji: json['emoji'] ?? '💰',
-    color: json['color'] ?? 0xFF667eea,
-  );
-}
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -232,87 +121,47 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    final db = DatabaseService.instance;
+    db.addListener(_onDbChanged);
     _loadData();
   }
 
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final txJson = prefs.getString('transactions');
-    final catJson = prefs.getString('categories');
-    final acctJson = prefs.getString('accounts');
-    final budgetJson = prefs.getString('budgets');
+  @override
+  void dispose() {
+    DatabaseService.instance.removeListener(_onDbChanged);
+    super.dispose();
+  }
 
+  void _onDbChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadData() async {
+    final db = DatabaseService.instance;
+    await db.loadAll();
     setState(() {
-      if (budgetJson != null) {
-        final list = jsonDecode(budgetJson) as List;
-        if (list.isNotEmpty) {
-          _budget = Budget.fromJson(list.first);
-        }
-      }
-      if (txJson != null) {
-        _transactions =
-            (jsonDecode(txJson) as List).map((e) => Transaction.fromJson(e)).toList();
-      }
-      if (catJson != null) {
-        final cats =
-            (jsonDecode(catJson) as List).map((e) => Category.fromJson(e)).toList();
-        _expenseCategories = cats.where((c) => c.isExpense).toList();
-        _incomeCategories = cats.where((c) => !c.isExpense).toList();
-      } else {
-        _expenseCategories = [
-          Category(name: '餐饮', emoji: '🍜', isExpense: true),
-          Category(name: '交通', emoji: '🚗', isExpense: true),
-          Category(name: '购物', emoji: '🛒', isExpense: true),
-          Category(name: '娱乐', emoji: '🎮', isExpense: true),
-          Category(name: '住房', emoji: '🏠', isExpense: true),
-          Category(name: '其他', emoji: '📦', isExpense: true),
-        ];
-        _incomeCategories = [
-          Category(name: '工资', emoji: '💼', isExpense: false),
-          Category(name: '兼职', emoji: '💻', isExpense: false),
-          Category(name: '投资', emoji: '📈', isExpense: false),
-          Category(name: '红包', emoji: '🧧', isExpense: false),
-          Category(name: '奖金', emoji: '🎉', isExpense: false),
-          Category(name: '其他', emoji: '📦', isExpense: false),
-        ];
-      }
-      if (acctJson != null) {
-        _accounts = (jsonDecode(acctJson) as List)
-            .map((e) => Account.fromJson(e))
-            .toList();
-      } else {
-        _accounts = [
-          Account(id: 'default', name: '默认账户', emoji: '🏦', balance: 0),
-        ];
-        _saveAccounts();
-      }
+      _accounts = db.accounts;
+      _transactions = db.transactions;
+      _expenseCategories = db.expenseCategories;
+      _incomeCategories = db.incomeCategories;
+      _budget = db.budget;
     });
   }
 
   Future<void> _saveTransactions() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'transactions', jsonEncode(_transactions.map((e) => e.toJson()).toList()));
+    await DatabaseService.instance.saveTransactions();
   }
 
   Future<void> _saveCategories() async {
-    final prefs = await SharedPreferences.getInstance();
-    final all = [..._expenseCategories, ..._incomeCategories];
-    await prefs.setString(
-        'categories', jsonEncode(all.map((e) => e.toJson()).toList()));
+    await DatabaseService.instance.saveCategories();
   }
 
   Future<void> _saveAccounts() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'accounts', jsonEncode(_accounts.map((e) => e.toJson()).toList()));
+    await DatabaseService.instance.saveAccounts();
   }
 
   Future<void> _saveBudgets() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_budget != null) {
-      await prefs.setString('budgets', jsonEncode([_budget!.toJson()]));
-    }
+    await DatabaseService.instance.saveBudget();
   }
 
   void _addTransaction(Transaction tx) {
@@ -1065,7 +914,7 @@ class _HomePageState extends State<HomePage> {
                     crossAxisCount: _accountGridColumns,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: _accountGridColumns == 2 ? 0.75 : (_accountGridColumns == 3 ? 0.75 : 0.7),
+                    childAspectRatio: _accountGridColumns == 2 ? 0.9 : (_accountGridColumns == 3 ? 0.9 : 0.85),
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -1922,9 +1771,81 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                 ),
+                if (AppConfig.cloudEnabled) ...[
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text('云端同步',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      icon: Icon(
+                        DatabaseService.instance.isCloud
+                            ? Icons.cloud_done
+                            : Icons.cloud_outlined,
+                      ),
+                      label: Text(
+                        DatabaseService.instance.isCloud ? '已连接到云端' : '登录云端',
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        if (DatabaseService.instance.isCloud) {
+                          _showCloudSettings();
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AuthPage()),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showCloudSettings() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('云端设置'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.cloud_upload),
+              title: const Text('上传本地数据'),
+              subtitle: const Text('将本地数据同步到云端'),
+              onTap: () async {
+                await DatabaseService.instance.uploadLocalData();
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('数据已上传到云端')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('退出登录'),
+              onTap: () async {
+                await DatabaseService.instance.signOut();
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  _loadData();
+                }
+              },
+            ),
+          ],
         ),
       ),
     );
