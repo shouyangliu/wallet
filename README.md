@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/mm_facetoface_collect_qrcode_1778429391872.png" width="120" alt="yl记账">
-</p>
-
 <h1 align="center">yl记账</h1>
 
 <p align="center">
@@ -84,12 +80,16 @@ flutter run
 
 ## ☕ 支持
 
-如果这个应用对你有帮助，欢迎请我喝杯咖啡 ❤️
+如果这个应用对你有帮助，欢迎打赏支持 ❤️
 
 <p align="center">
   <img src="assets/mm_facetoface_collect_qrcode_1778429391872.png" width="250" alt="微信收款码">
+  &nbsp;&nbsp;&nbsp;
+  <img src="assets/1778433650381.jpg" width="250" alt="支付宝收款码">
 </p>
-<p align="center"><b>微信扫一扫</b></p>
+<p align="center">
+  <b>微信扫一扫</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>支付宝扫一扫</b>
+</p>
 
 ---
 

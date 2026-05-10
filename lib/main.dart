@@ -1838,18 +1838,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Text('如果这个应用对你有帮助，欢迎打赏一杯咖啡 ☕', textAlign: TextAlign.center),
             const SizedBox(height: 20),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                'assets/mm_facetoface_collect_qrcode_1778429391872.png',
-                width: 250,
-                height: 250,
-                fit: BoxFit.contain,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text('微信扫一扫', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               height: 48,
