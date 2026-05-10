@@ -2049,25 +2049,25 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _importCsv() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
+    final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('导入 CSV'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('请粘贴 CSV 内容（首行为表头）',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              maxLines: 10,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText:
-                    'id,amount,category,emoji,note,date,isExpense,accountId\n...',
-              ),
+            ListTile(
+              leading: const Icon(Icons.file_open),
+              title: const Text('选择文件'),
+              subtitle: const Text('从设备选择 CSV 文件'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.paste),
+              title: const Text('粘贴内容'),
+              subtitle: const Text('粘贴 CSV 内容'),
+              onTap: () => Navigator.pop(ctx, 'paste'),
             ),
           ],
         ),
@@ -2076,20 +2076,28 @@ class _HomePageState extends State<HomePage> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('取消'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            ),
-            child: const Text('导入'),
-          ),
         ],
       ),
     );
-    if (result == null || result.trim().isEmpty) return;
 
-    final lines = result.trim().split('\n');
+    if (choice == null) return;
+    
+    String? csvContent;
+    
+    if (choice == 'file') {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      csvContent = String.fromCharCodes(result.files.first.bytes!);
+    } else {
+      csvContent = await _showPasteDialog();
+      if (csvContent == null) return;
+    }
+    
+    final lines = csvContent.trim().split('\n');
     if (lines.length < 2) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2131,6 +2139,48 @@ class _HomePageState extends State<HomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('导入完成：新增 $imported 条，跳过 $skipped 条（已存在）')),
     );
+  }
+
+  Future<String?> _showPasteDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('粘贴 CSV 内容'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('请粘贴 CSV 内容（首行为表头）',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 10,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText:
+                    'id,amount,category,emoji,note,date,isExpense,accountId\n...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    return result;
   }
 
   List<String> _parseCsvLine(String line) {
