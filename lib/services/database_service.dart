@@ -32,20 +32,22 @@ class DatabaseService extends ChangeNotifier {
     _webdavUser = prefs.getString('webdav_user');
     _webdavPwd = prefs.getString('webdav_pwd');
     if (_webdavUser != null && _webdavPwd != null) {
-      _connected = await _testConnection();
+      final err = await _testConnection();
+      _connected = err == null;
     }
   }
 
-  Future<bool> _testConnection() async {
+  Future<String?> _testConnection() async {
     try {
       final client = http.Client();
-      final req = http.Request('OPTIONS', Uri.parse('https://dav.jianguoyun.com/dav/'));
+      final req = http.Request('PROPFIND', Uri.parse('https://dav.jianguoyun.com/dav/'));
       req.headers.addAll(_authHeaders());
-      final res = await client.send(req);
+      final res = await client.send(req).timeout(const Duration(seconds: 10));
       client.close();
-      return res.statusCode == 200 || res.statusCode == 207;
-    } catch (_) {
-      return false;
+      if (res.statusCode == 207 || res.statusCode == 200) return null;
+      return '连接失败（HTTP ${res.statusCode}），请检查账号和应用密码';
+    } catch (e) {
+      return '网络异常：$e';
     }
   }
 
@@ -61,11 +63,11 @@ class DatabaseService extends ChangeNotifier {
     _webdavUser = user;
     _webdavPwd = pwd;
 
-    _connected = await _testConnection();
-    if (!_connected) {
+    final errMsg = await _testConnection();
+    if (errMsg != null) {
       _webdavUser = null;
       _webdavPwd = null;
-      return '无法连接到坚果云，请检查网络和账号';
+      return errMsg;
     }
 
     try {
@@ -86,6 +88,7 @@ class DatabaseService extends ChangeNotifier {
       return '同步失败：$e';
     }
 
+    _connected = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('webdav_user', user);
     await prefs.setString('webdav_pwd', pwd);
