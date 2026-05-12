@@ -11,6 +11,8 @@ import 'models/transaction.dart';
 import 'models/category.dart';
 import 'models/budget.dart';
 import 'services/database_service.dart';
+import 'config.dart';
+import 'pages/auth_page.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
 final ValueNotifier<bool> darkModeNotifier = ValueNotifier(false);
@@ -920,6 +922,29 @@ class _HomePageState extends State<HomePage> {
                       final a = _accounts[index];
                       return GestureDetector(
                         onTap: () => _showEditAccountDialog(a),
+                        onLongPress: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('确认删除'),
+                              content: Text('确定删除账户「${a.name}」？\n该账户下的交易记录不会被删除，但会失去账户关联。'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    setState(() {
+                                      _accounts.removeWhere((acct) => acct.id == a.id);
+                                      _saveAccounts();
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                  child: const Text('删除'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                         child: Container(
                           decoration: BoxDecoration(
                             color: Color(a.color),
@@ -1776,25 +1801,39 @@ class _HomePageState extends State<HomePage> {
                 const Text('数据同步',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    icon: Icon(
-                      DatabaseService.instance.isConnected
-                          ? Icons.cloud_done
-                          : Icons.cloud_outlined,
+                if (AppConfig.cloudEnabled) ...[
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text('云端同步',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      icon: Icon(
+                        DatabaseService.instance.isCloud
+                            ? Icons.cloud_done
+                            : Icons.cloud_outlined,
+                      ),
+                      label: Text(
+                        DatabaseService.instance.isCloud ? '已连接到云端' : '登录云端',
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        if (DatabaseService.instance.isCloud) {
+                          _showCloudSettings();
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AuthPage()),
+                          );
+                        }
+                      },
                     ),
-                    label: Text(
-                      DatabaseService.instance.isConnected
-                          ? '已连接到坚果云'
-                          : '配置坚果云同步',
-                    ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _showWebDavDialog();
-                    },
                   ),
-                ),
+                ],
                 const SizedBox(height: 8),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -1862,83 +1901,41 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showWebDavDialog() {
-    final userCtrl = TextEditingController();
-    final pwdCtrl = TextEditingController();
-
-    if (DatabaseService.instance.isConnected) {
-      userCtrl.text = DatabaseService.instance.webdavUser ?? '';
-    }
-
+  void _showCloudSettings() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(DatabaseService.instance.isConnected ? '坚果云已连接' : '配置坚果云'),
+        title: const Text('云端设置'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('输入你的坚果云账号和应用密码', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: userCtrl,
-              decoration: const InputDecoration(
-                labelText: '坚果云账号（邮箱）',
-                border: OutlineInputBorder(),
-              ),
+            ListTile(
+              leading: const Icon(Icons.cloud_upload),
+              title: const Text('上传本地数据'),
+              subtitle: const Text('将本地数据同步到云端'),
+              onTap: () async {
+                await DatabaseService.instance.uploadLocalData();
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('数据已上传到云端')),
+                  );
+                }
+              },
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pwdCtrl,
-              decoration: const InputDecoration(
-                labelText: '应用密码',
-                border: OutlineInputBorder(),
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 8),
-            Text('应用密码在坚果云「账户信息」→「安全选项」→「应用密码」中生成',
-                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-        actions: [
-          if (DatabaseService.instance.isConnected)
-            TextButton(
-              onPressed: () async {
-                await DatabaseService.instance.disconnect();
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('退出登录'),
+              onTap: () async {
+                await DatabaseService.instance.signOut();
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
                   _loadData();
                 }
               },
-              child: const Text('断开连接', style: TextStyle(color: Colors.redAccent)),
             ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final user = userCtrl.text.trim();
-              final pwd = pwdCtrl.text.trim();
-              if (user.isEmpty || pwd.isEmpty) return;
-              final err = await DatabaseService.instance.configure(user, pwd);
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-                if (err == null) {
-                  _loadData();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('坚果云连接成功')),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(err)),
-                  );
-                }
-              }
-            },
-            child: const Text('连接'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2043,134 +2040,6 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
-
-    if (choice == null) return;
-    
-    String? csvContent;
-    
-    if (choice == 'file') {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) return;
-      csvContent = utf8.decode(result.files.first.bytes!);
-    } else {
-      csvContent = await _showPasteDialog();
-      if (csvContent == null) return;
-    }
-    
-    int accountsImported = 0;
-    int transactionsImported = 0;
-    int transactionsSkipped = 0;
-    
-    final sections = csvContent.split('\n\n');
-    final existingAccountIds = _accounts.map((a) => a.id).toSet();
-    final existingTransactionIds = _transactions.map((t) => t.id).toSet();
-    
-    for (final section in sections) {
-      final lines = section.trim().split('\n');
-      if (lines.isEmpty) continue;
-      
-      if (lines.first == '#ACCOUNTS') {
-        // 导入账户
-        for (int i = 1; i < lines.length; i++) {
-          final line = lines[i].trim();
-          if (line.isEmpty) continue;
-          final cols = _parseCsvLine(line);
-          if (cols.length < 4) continue;
-          final id = cols[0];
-          if (existingAccountIds.contains(id)) continue;
-          _accounts.add(Account(
-            id: id,
-            name: cols[1],
-            emoji: cols.length > 2 ? cols[2] : '🏦',
-            balance: double.tryParse(cols[3]) ?? 0,
-            color: cols.length > 4 ? int.tryParse(cols[4]) ?? 0xFF667eea : 0xFF667eea,
-          ));
-          existingAccountIds.add(id);
-          accountsImported++;
-        }
-      } else if (lines.first == '#TRANSACTIONS') {
-        // 导入交易
-        for (int i = 1; i < lines.length; i++) {
-          final line = lines[i].trim();
-          if (line.isEmpty) continue;
-          final cols = _parseCsvLine(line);
-          if (cols.length < 7) continue;
-          final id = cols[0];
-          if (existingTransactionIds.contains(id)) {
-            transactionsSkipped++;
-            continue;
-          }
-          final amount = double.tryParse(cols[1]);
-          if (amount == null) continue;
-          final date = DateTime.tryParse(cols[5]);
-          if (date == null) continue;
-          _transactions.add(Transaction(
-            id: id,
-            amount: amount,
-            category: cols[2],
-            emoji: cols.length > 3 ? cols[3] : '',
-             note: cols.length > 4 ? cols[4] : '',
-             date: date,
-             isExpense: cols[6].toLowerCase() == 'true',
-             accountId: cols.length > 7 ? cols[7] : '',
-           ));
-           transactionsImported++;
-         }
-       }
-     }
-     setState(() {});
-     _saveTransactions();
-     _saveAccounts();
-     if (!mounted) return;
-     ScaffoldMessenger.of(context).showSnackBar(
-       SnackBar(content: Text('导入完成：账户 $accountsImported 个，交易 $transactionsImported 条，跳过 $transactionsSkipped 条（已存在）')),
-     );
-   }
-
-  Future<String?> _showPasteDialog() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('粘贴 CSV 内容'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('请粘贴 CSV 内容（首行为表头）',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              maxLines: 10,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText:
-                    'id,amount,category,emoji,note,date,isExpense,accountId\n...',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            ),
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    );
-    return result;
   }
 
   List<String> _parseCsvLine(String line) {
@@ -2468,6 +2337,34 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              showDialog(
+                context: ctx,
+                builder: (ctx2) => AlertDialog(
+                  title: const Text('确认删除'),
+                  content: Text('确定删除账户「${account.name}」？\n该账户下的交易记录不会被删除，但会失去账户关联。'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('取消')),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx2);
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _accounts.removeWhere((a) => a.id == account.id);
+                          _saveAccounts();
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                      child: const Text('删除'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            child: const Text('删除账户', style: TextStyle(color: Colors.redAccent)),
+          ),
+          const Spacer(),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('取消'),

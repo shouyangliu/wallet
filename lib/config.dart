@@ -1,6 +1,7 @@
 class AppConfig {
-  static const String webdavUrl = 'https://dav.jianguoyun.com/dav/yl_wallet/';
+  static const String supabaseUrl = 'https://jbevbvdmgpjxhyxnsgyd.supabase.co';
+  static const String supabaseAnonKey =
+      'sb_publishable_JdiL5aQsLLmxpOAZakPzYQ_ZpY-Li6_';
 
-  static const String nutstoreUser = '';
-  static const String nutstorePwd = '';
+  static const bool cloudEnabled = true;
 }
