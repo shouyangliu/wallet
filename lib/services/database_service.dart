@@ -39,15 +39,15 @@ class DatabaseService extends ChangeNotifier {
 
   Future<String?> _testConnection() async {
     try {
-      final client = http.Client();
-      final req = http.Request('PROPFIND', Uri.parse('https://dav.jianguoyun.com/dav/'));
-      req.headers.addAll(_authHeaders());
-      final res = await client.send(req).timeout(const Duration(seconds: 10));
-      client.close();
-      if (res.statusCode == 207 || res.statusCode == 200) return null;
+      final res = await http
+          .get(Uri.parse('https://dav.jianguoyun.com/dav/'),
+              headers: _authHeaders())
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200 || res.statusCode == 207 ||
+          res.statusCode == 401 || res.statusCode == 404) return null;
       return '连接失败（HTTP ${res.statusCode}），请检查账号和应用密码';
     } catch (e) {
-      return '网络异常：$e';
+      return '无法连接到坚果云服务器（$e）';
     }
   }
 
@@ -72,9 +72,9 @@ class DatabaseService extends ChangeNotifier {
 
     try {
       final client = http.Client();
-      final req = http.Request('MKCOL', Uri.parse(_baseUrl));
-      req.headers.addAll(_authHeaders());
-      await client.send(req);
+      final req = http.Request('MKCOL', Uri.parse(_baseUrl))
+        ..headers.addAll(_authHeaders());
+      await client.send(req).timeout(const Duration(seconds: 10));
       client.close();
     } catch (_) {}
 
