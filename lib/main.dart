@@ -1921,17 +1921,17 @@ class _HomePageState extends State<HomePage> {
               final user = userCtrl.text.trim();
               final pwd = pwdCtrl.text.trim();
               if (user.isEmpty || pwd.isEmpty) return;
-              await DatabaseService.instance.configure(user, pwd);
+              final err = await DatabaseService.instance.configure(user, pwd);
               if (ctx.mounted) {
                 Navigator.pop(ctx);
-                if (DatabaseService.instance.isConnected) {
+                if (err == null) {
                   _loadData();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('坚果云连接成功')),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('连接失败，请检查账号和应用密码')),
+                    SnackBar(content: Text(err)),
                   );
                 }
               }

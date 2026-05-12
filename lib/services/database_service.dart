@@ -38,11 +38,12 @@ class DatabaseService extends ChangeNotifier {
 
   Future<bool> _testConnection() async {
     try {
-      final res = await http.put(
-        Uri.parse(_baseUrl),
-        headers: _authHeaders(),
-      );
-      return res.statusCode == 201 || res.statusCode == 204;
+      final client = http.Client();
+      final req = http.Request('OPTIONS', Uri.parse('https://dav.jianguoyun.com/dav/'));
+      req.headers.addAll(_authHeaders());
+      final res = await client.send(req);
+      client.close();
+      return res.statusCode == 200 || res.statusCode == 207;
     } catch (_) {
       return false;
     }
@@ -56,18 +57,40 @@ class DatabaseService extends ChangeNotifier {
     };
   }
 
-  Future<void> configure(String user, String pwd) async {
+  Future<String?> configure(String user, String pwd) async {
     _webdavUser = user;
     _webdavPwd = pwd;
+
     _connected = await _testConnection();
-    if (_connected) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('webdav_user', user);
-      await prefs.setString('webdav_pwd', pwd);
+    if (!_connected) {
+      _webdavUser = null;
+      _webdavPwd = null;
+      return '无法连接到坚果云，请检查网络和账号';
+    }
+
+    try {
+      final client = http.Client();
+      final req = http.Request('MKCOL', Uri.parse(_baseUrl));
+      req.headers.addAll(_authHeaders());
+      await client.send(req);
+      client.close();
+    } catch (_) {}
+
+    try {
       await _syncDown();
       await _syncUp();
-      notifyListeners();
+    } catch (e) {
+      _connected = false;
+      _webdavUser = null;
+      _webdavPwd = null;
+      return '同步失败：$e';
     }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('webdav_user', user);
+    await prefs.setString('webdav_pwd', pwd);
+    notifyListeners();
+    return null;
   }
 
   Future<void> disconnect() async {
