@@ -10,9 +10,7 @@ import 'models/account.dart';
 import 'models/transaction.dart';
 import 'models/category.dart';
 import 'models/budget.dart';
-import 'config.dart';
 import 'services/database_service.dart';
-import 'pages/auth_page.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
 final ValueNotifier<bool> darkModeNotifier = ValueNotifier(false);
@@ -1772,39 +1770,31 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                 ),
-                if (AppConfig.cloudEnabled) ...[
-                  const SizedBox(height: 8),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  const Text('云端同步',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      icon: Icon(
-                        DatabaseService.instance.isCloud
-                            ? Icons.cloud_done
-                            : Icons.cloud_outlined,
-                      ),
-                      label: Text(
-                        DatabaseService.instance.isCloud ? '已连接到云端' : '登录云端',
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        if (DatabaseService.instance.isCloud) {
-                          _showCloudSettings();
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const AuthPage()),
-                          );
-                        }
-                      },
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('数据同步',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    icon: Icon(
+                      DatabaseService.instance.isConnected
+                          ? Icons.cloud_done
+                          : Icons.cloud_outlined,
                     ),
+                    label: Text(
+                      DatabaseService.instance.isConnected
+                          ? '已连接到坚果云'
+                          : '配置坚果云同步',
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showWebDavDialog();
+                    },
                   ),
-                ],
+                ),
                 const SizedBox(height: 8),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -1872,41 +1862,83 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showCloudSettings() {
+  void _showWebDavDialog() {
+    final userCtrl = TextEditingController();
+    final pwdCtrl = TextEditingController();
+
+    if (DatabaseService.instance.isConnected) {
+      userCtrl.text = DatabaseService.instance.webdavUser ?? '';
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('云端设置'),
+        title: Text(DatabaseService.instance.isConnected ? '坚果云已连接' : '配置坚果云'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.cloud_upload),
-              title: const Text('上传本地数据'),
-              subtitle: const Text('将本地数据同步到云端'),
-              onTap: () async {
-                await DatabaseService.instance.syncAfterLogin();
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('数据已上传到云端')),
-                  );
-                }
-              },
+            const Text('输入你的坚果云账号和应用密码', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: userCtrl,
+              decoration: const InputDecoration(
+                labelText: '坚果云账号（邮箱）',
+                border: OutlineInputBorder(),
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('退出登录'),
-              onTap: () async {
-                await DatabaseService.instance.signOut();
+            const SizedBox(height: 12),
+            TextField(
+              controller: pwdCtrl,
+              decoration: const InputDecoration(
+                labelText: '应用密码',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+            ),
+            const SizedBox(height: 8),
+            Text('应用密码在坚果云「账户信息」→「安全选项」→「应用密码」中生成',
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        actions: [
+          if (DatabaseService.instance.isConnected)
+            TextButton(
+              onPressed: () async {
+                await DatabaseService.instance.disconnect();
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
                   _loadData();
                 }
               },
+              child: const Text('断开连接', style: TextStyle(color: Colors.redAccent)),
             ),
-          ],
-        ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = userCtrl.text.trim();
+              final pwd = pwdCtrl.text.trim();
+              if (user.isEmpty || pwd.isEmpty) return;
+              await DatabaseService.instance.configure(user, pwd);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                if (DatabaseService.instance.isConnected) {
+                  _loadData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('坚果云连接成功')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('连接失败，请检查账号和应用密码')),
+                  );
+                }
+              }
+            },
+            child: const Text('连接'),
+          ),
+        ],
       ),
     );
   }

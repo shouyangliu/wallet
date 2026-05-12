@@ -1,26 +1,25 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' hide Category;
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../config.dart';
 import '../models/account.dart';
 import '../models/transaction.dart';
 import '../models/category.dart';
 import '../models/budget.dart';
-
-enum SyncStatus { localOnly, syncing, cloud }
 
 class DatabaseService extends ChangeNotifier {
   static final DatabaseService _instance = DatabaseService._();
   static DatabaseService get instance => _instance;
   DatabaseService._();
 
-  SyncStatus _status = SyncStatus.localOnly;
-  SyncStatus get status => _status;
-  bool get isCloud => _status == SyncStatus.cloud;
-  bool get isLocalOnly => _status == SyncStatus.localOnly;
+  static const _baseUrl = 'https://dav.jianguoyun.com/dav/yl_wallet/';
 
-  User? get user => AppConfig.cloudEnabled ? Supabase.instance.client.auth.currentUser : null;
+  String? _webdavUser;
+  String? _webdavPwd;
+  bool _connected = false;
+
+  bool get isConnected => _connected;
+  String? get webdavUser => _webdavUser;
 
   List<Account> accounts = [];
   List<Transaction> transactions = [];
@@ -29,22 +28,136 @@ class DatabaseService extends ChangeNotifier {
   Budget? budget;
 
   Future<void> init() async {
-    if (AppConfig.cloudEnabled) {
-      await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        anonKey: AppConfig.supabaseAnonKey,
+    final prefs = await SharedPreferences.getInstance();
+    _webdavUser = prefs.getString('webdav_user');
+    _webdavPwd = prefs.getString('webdav_pwd');
+    if (_webdavUser != null && _webdavPwd != null) {
+      _connected = await _testConnection();
+    }
+  }
+
+  Future<bool> _testConnection() async {
+    try {
+      final res = await http.put(
+        Uri.parse(_baseUrl),
+        headers: _authHeaders(),
       );
-      Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-        if (data.session != null) {
-          _status = SyncStatus.cloud;
-        } else {
-          _status = SyncStatus.localOnly;
-        }
-        notifyListeners();
-      });
-      if (Supabase.instance.client.auth.currentUser != null) {
-        _status = SyncStatus.cloud;
+      return res.statusCode == 201 || res.statusCode == 204;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Map<String, String> _authHeaders() {
+    final basic = base64Encode(utf8.encode('$_webdavUser:$_webdavPwd'));
+    return {
+      'Authorization': 'Basic $basic',
+      'User-Agent': 'yl_wallet',
+    };
+  }
+
+  Future<void> configure(String user, String pwd) async {
+    _webdavUser = user;
+    _webdavPwd = pwd;
+    _connected = await _testConnection();
+    if (_connected) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('webdav_user', user);
+      await prefs.setString('webdav_pwd', pwd);
+      await _syncDown();
+      await _syncUp();
+      notifyListeners();
+    }
+  }
+
+  Future<void> disconnect() async {
+    _webdavUser = null;
+    _webdavPwd = null;
+    _connected = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('webdav_user');
+    await prefs.remove('webdav_pwd');
+    notifyListeners();
+  }
+
+  Future<String?> _readFile(String name) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl$name'),
+        headers: _authHeaders(),
+      );
+      if (res.statusCode == 200) return res.body;
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _writeFile(String name, String content) async {
+    try {
+      await http.put(
+        Uri.parse('$_baseUrl$name'),
+        headers: {
+          ..._authHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: content,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _syncDown() async {
+    if (!_connected) return;
+
+    final txBody = await _readFile('transactions.json');
+    if (txBody != null) {
+      final list = jsonDecode(txBody) as List;
+      if (list.isNotEmpty) {
+        transactions =
+            list.map((e) => Transaction.fromJson(e)).toList();
       }
+    }
+
+    final acctBody = await _readFile('accounts.json');
+    if (acctBody != null) {
+      final list = jsonDecode(acctBody) as List;
+      if (list.isNotEmpty) {
+        accounts = list.map((e) => Account.fromJson(e)).toList();
+      }
+    }
+
+    final catBody = await _readFile('categories.json');
+    if (catBody != null) {
+      final cats = (jsonDecode(catBody) as List)
+          .map((e) => Category.fromJson(e))
+          .toList();
+      expenseCategories = cats.where((c) => c.isExpense).toList();
+      incomeCategories = cats.where((c) => !c.isExpense).toList();
+    }
+
+    final budgetBody = await _readFile('budgets.json');
+    if (budgetBody != null) {
+      final list = jsonDecode(budgetBody) as List;
+      if (list.isNotEmpty) {
+        budget = Budget.fromJson(list.first);
+      }
+    }
+  }
+
+  Future<void> _syncUp() async {
+    if (!_connected) return;
+    await _writeFile(
+        'transactions.json',
+        jsonEncode(transactions.map((e) => e.toJson()).toList()));
+    await _writeFile(
+        'accounts.json',
+        jsonEncode(accounts.map((e) => e.toJson()).toList()));
+    final all = [...expenseCategories, ...incomeCategories];
+    await _writeFile(
+        'categories.json',
+        jsonEncode(all.map((e) => e.toJson()).toList()));
+    if (budget != null) {
+      await _writeFile(
+          'budgets.json',
+          jsonEncode([budget!.toJson()]));
     }
   }
 
@@ -102,146 +215,41 @@ class DatabaseService extends ChangeNotifier {
       await _saveLocal('accounts', accounts.map((e) => e.toJson()).toList());
     }
 
-    if (isCloud) {
-      await _syncFromCloud();
-    }
-  }
-
-  Future<void> _syncFromCloud() async {
-    final uid = user!.id;
-    try {
-      _status = SyncStatus.syncing;
-      notifyListeners();
-
-      final acctRes = await Supabase.instance.client
-          .from('accounts')
-          .select()
-          .eq('user_id', uid);
-      if (acctRes.isNotEmpty) {
-        accounts =
-            acctRes.map((e) => Account.fromJson(e)).toList().cast<Account>();
-      }
-
-      final txRes = await Supabase.instance.client
-          .from('transactions')
-          .select()
-          .eq('user_id', uid);
-      if (txRes.isNotEmpty) {
-        transactions = txRes
-            .map((e) => Transaction.fromJson(e))
-            .toList()
-            .cast<Transaction>();
-      }
-
-      final catRes = await Supabase.instance.client
-          .from('categories')
-          .select()
-          .eq('user_id', uid);
-      if (catRes.isNotEmpty) {
-        final cats =
-            catRes.map((e) => Category.fromJson(e)).toList().cast<Category>();
-        expenseCategories = cats.where((c) => c.isExpense).toList();
-        incomeCategories = cats.where((c) => !c.isExpense).toList();
-      }
-
-      await _saveAllLocal();
-      _status = SyncStatus.cloud;
-      notifyListeners();
-    } catch (e) {
-      _status = SyncStatus.cloud;
+    if (_connected) {
+      await _syncDown();
       notifyListeners();
     }
   }
 
-  Future<void> _saveAllLocal() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'transactions', jsonEncode(transactions.map((e) => e.toJson()).toList()));
-    await prefs.setString(
-        'accounts', jsonEncode(accounts.map((e) => e.toJson()).toList()));
-    final all = [...expenseCategories, ...incomeCategories];
-    await prefs.setString('categories', jsonEncode(all.map((e) => e.toJson()).toList()));
-    if (budget != null) {
-      await prefs.setString('budgets', jsonEncode([budget!.toJson()]));
-    }
-  }
-
-  Future<void> _saveLocal(String key, List<Map<String, dynamic>> data) async {
+  Future<void> _saveLocal(
+      String key, List<Map<String, dynamic>> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, jsonEncode(data));
   }
 
-  Future<void> _saveCloud(
-      String table, String key, List<Map<String, dynamic>> data) async {
-    if (!isCloud) return;
-    final uid = user!.id;
-    try {
-      await Supabase.instance.client.from(table).upsert(
-            data.map((e) => {...e, 'user_id': uid}).toList(),
-          );
-    } catch (_) {}
-  }
-
   Future<void> saveAccounts() async {
     await _saveLocal('accounts', accounts.map((e) => e.toJson()).toList());
-    await _saveCloud('accounts', 'accounts', accounts.map((e) => e.toJson()).toList());
+    await _syncUp();
   }
 
   Future<void> saveTransactions() async {
     await _saveLocal(
         'transactions', transactions.map((e) => e.toJson()).toList());
-    await _saveCloud('transactions', 'transactions',
-        transactions.map((e) => e.toJson()).toList());
+    await _syncUp();
   }
 
   Future<void> saveCategories() async {
     final all = [...expenseCategories, ...incomeCategories];
     final data = all.map((e) => e.toJson()).toList();
     await _saveLocal('categories', data);
-    await _saveCloud('categories', 'categories', data);
+    await _syncUp();
   }
 
   Future<void> saveBudget() async {
     final prefs = await SharedPreferences.getInstance();
     if (budget != null) {
       await prefs.setString('budgets', jsonEncode([budget!.toJson()]));
-      if (isCloud) {
-        try {
-          await Supabase.instance.client.from('budgets').upsert({
-            ...budget!.toJson(),
-            'user_id': user!.id,
-          });
-        } catch (_) {}
-      }
     }
-  }
-
-  Future<void> syncAfterLogin() async {
-    if (!isCloud) return;
-    await _syncFromCloud();
-    await saveAccounts();
-    await saveTransactions();
-    await saveCategories();
-    await saveBudget();
-  }
-
-  Future<AuthResponse> signIn(String email, String password) async {
-    final resp = await Supabase.instance.client.auth
-        .signInWithPassword(email: email, password: password);
-    _status = SyncStatus.cloud;
-    notifyListeners();
-    return resp;
-  }
-
-  Future<AuthResponse> signUp(String email, String password) async {
-    final resp = await Supabase.instance.client.auth
-        .signUp(email: email, password: password);
-    return resp;
-  }
-
-  Future<void> signOut() async {
-    await Supabase.instance.client.auth.signOut();
-    _status = SyncStatus.localOnly;
-    notifyListeners();
+    await _syncUp();
   }
 }
