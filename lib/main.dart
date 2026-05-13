@@ -11,7 +11,6 @@ import 'models/transaction.dart';
 import 'models/category.dart';
 import 'models/budget.dart';
 import 'services/database_service.dart';
-import 'config.dart';
 import 'pages/auth_page.dart';
 
 final ValueNotifier<int> themeColorNotifier = ValueNotifier(0xFF667eea);
@@ -1801,39 +1800,39 @@ class _HomePageState extends State<HomePage> {
                 const Text('数据同步',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 12),
-                if (AppConfig.cloudEnabled) ...[
-                  const SizedBox(height: 8),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  const Text('云端同步',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      icon: Icon(
-                        DatabaseService.instance.isCloud
-                            ? Icons.cloud_done
-                            : Icons.cloud_outlined,
-                      ),
-                      label: Text(
-                        DatabaseService.instance.isCloud ? '已连接到云端' : '登录云端',
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        if (DatabaseService.instance.isCloud) {
-                          _showCloudSettings();
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const AuthPage()),
-                          );
-                        }
-                      },
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('云端同步',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    icon: Icon(
+                      DatabaseService.instance.isCloud
+                          ? Icons.cloud_done
+                          : Icons.cloud_outlined,
                     ),
+                    label: Text(
+                      DatabaseService.instance.isCloud
+                          ? '已登录云端'
+                          : '登录云端',
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      if (DatabaseService.instance.isCloud) {
+                        _showCloudSettings();
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const AuthPage()),
+                        );
+                      }
+                    },
                   ),
-                ],
+                ),
                 const SizedBox(height: 8),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -2280,7 +2279,7 @@ class _HomePageState extends State<HomePage> {
             decoration: BoxDecoration(
               color: ctrl.text == e
                   ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: ctrl.text == e
                   ? Border.all(color: Theme.of(context).colorScheme.primary)
@@ -2293,7 +2292,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildColorPicker(ValueChanged<int> onColorSelected) {
+  Widget _buildColorPicker(int selectedColor, ValueChanged<int> onColorSelected) {
     final colors = [
       0xFF667eea, 0xFF764ba2, 0xFFf093fb, 0xFF4facfe,
       0xFF00f2fe, 0xFF43e97b, 0xFF38f9d7, 0xFFffecd2,
@@ -2303,6 +2302,7 @@ class _HomePageState extends State<HomePage> {
       spacing: 8,
       runSpacing: 8,
       children: colors.map((c) {
+        final isSelected = c == selectedColor;
         return GestureDetector(
           onTap: () => onColorSelected(c),
           child: Container(
@@ -2311,8 +2311,16 @@ class _HomePageState extends State<HomePage> {
             decoration: BoxDecoration(
               color: Color(c),
               shape: BoxShape.circle,
-              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.outlineVariant,
+                width: isSelected ? 3 : 1,
+              ),
             ),
+            child: isSelected
+                ? const Icon(Icons.check, size: 18, color: Colors.white)
+                : null,
           ),
         );
       }).toList(),
@@ -2363,7 +2371,7 @@ class _HomePageState extends State<HomePage> {
               Text('选择账户颜色',
                   style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 6),
-              _buildColorPicker((color) => selectedColor = color),
+              _buildColorPicker(selectedColor, (color) => selectedColor = color),
               const SizedBox(height: 12),
               Text('选择 Emoji',
                   style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -2452,45 +2460,53 @@ class _HomePageState extends State<HomePage> {
               Text('选择账户颜色',
                   style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 6),
-              _buildColorPicker((color) => selectedColor = color),
+              _buildColorPicker(selectedColor, (color) => selectedColor = color),
               const SizedBox(height: 12),
               Text('选择 Emoji',
                   style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 6),
               _buildEmojiPicker(emojiController),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: ctx,
+                      builder: (ctx2) => AlertDialog(
+                        title: const Text('确认删除'),
+                        content: Text('确定删除账户「${account.name}」？\n该账户下的交易记录不会被删除，但会失去账户关联。'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('取消')),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(ctx2);
+                              Navigator.pop(ctx);
+                              setState(() {
+                                _accounts.removeWhere((a) => a.id == account.id);
+                                _saveAccounts();
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                            child: const Text('删除'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('删除此账户'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    side: BorderSide(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
+                  ),
+                ),
+              ),
               SizedBox(height: bottomInset),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              showDialog(
-                context: ctx,
-                builder: (ctx2) => AlertDialog(
-                  title: const Text('确认删除'),
-                  content: Text('确定删除账户「${account.name}」？\n该账户下的交易记录不会被删除，但会失去账户关联。'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('取消')),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(ctx2);
-                        Navigator.pop(ctx);
-                        setState(() {
-                          _accounts.removeWhere((a) => a.id == account.id);
-                          _saveAccounts();
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                      child: const Text('删除'),
-                    ),
-                  ],
-                ),
-              );
-            },
-            child: const Text('删除账户', style: TextStyle(color: Colors.redAccent)),
-          ),
-          const Spacer(),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('取消'),

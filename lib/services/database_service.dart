@@ -118,8 +118,7 @@ class DatabaseService extends ChangeNotifier {
           .select()
           .eq('user_id', uid);
       if (acctRes.isNotEmpty && accounts.isEmpty) {
-        accounts =
-            acctRes.map((e) => Account.fromJson(e)).toList().cast<Account>();
+        accounts = acctRes.map((e) => Account.fromJson(e)).toList().cast<Account>();
       }
 
       final txRes = await Supabase.instance.client
@@ -147,6 +146,7 @@ class DatabaseService extends ChangeNotifier {
       _status = SyncStatus.cloud;
       notifyListeners();
     } catch (e) {
+      debugPrint('_syncFromCloud error: $e');
       _status = SyncStatus.cloud;
       notifyListeners();
     }
@@ -157,15 +157,16 @@ class DatabaseService extends ChangeNotifier {
     await prefs.setString(key, jsonEncode(data));
   }
 
-  Future<void> _saveCloud(
-      String table, List<Map<String, dynamic>> data) async {
+  Future<void> _saveCloud(String table, List<Map<String, dynamic>> data) async {
     if (!isCloud) return;
     final uid = user!.id;
     try {
       await Supabase.instance.client
           .from(table)
           .upsert(data.map((e) => {...e, 'user_id': uid}).toList());
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('_saveCloud $table error: $e');
+    }
   }
 
   Future<void> saveAccounts() async {
@@ -197,7 +198,9 @@ class DatabaseService extends ChangeNotifier {
             ...budget!.toJson(),
             'user_id': user!.id,
           });
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('saveBudget error: $e');
+        }
       }
     }
   }
