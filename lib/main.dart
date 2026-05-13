@@ -2040,6 +2040,132 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+
+    if (choice == null) return;
+    
+    String? csvContent;
+    
+    if (choice == 'file') {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      csvContent = utf8.decode(result.files.first.bytes!);
+    } else {
+      csvContent = await _showPasteDialog();
+      if (csvContent == null) return;
+    }
+    
+    int accountsImported = 0;
+    int transactionsImported = 0;
+    int transactionsSkipped = 0;
+    
+    final sections = csvContent.split('\n\n');
+    final existingAccountIds = _accounts.map((a) => a.id).toSet();
+    final existingTransactionIds = _transactions.map((t) => t.id).toSet();
+    
+    for (final section in sections) {
+      final lines = section.trim().split('\n');
+      if (lines.isEmpty) continue;
+      
+      if (lines.first == '#ACCOUNTS') {
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trim();
+          if (line.isEmpty) continue;
+          final cols = _parseCsvLine(line);
+          if (cols.length < 4) continue;
+          final id = cols[0];
+          if (existingAccountIds.contains(id)) continue;
+          _accounts.add(Account(
+            id: id,
+            name: cols[1],
+            emoji: cols.length > 2 ? cols[2] : '🏦',
+            balance: double.tryParse(cols[3]) ?? 0,
+            color: cols.length > 4 ? int.tryParse(cols[4]) ?? 0xFF667eea : 0xFF667eea,
+          ));
+          existingAccountIds.add(id);
+          accountsImported++;
+        }
+      } else if (lines.first == '#TRANSACTIONS') {
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trim();
+          if (line.isEmpty) continue;
+          final cols = _parseCsvLine(line);
+          if (cols.length < 7) continue;
+          final id = cols[0];
+          if (existingTransactionIds.contains(id)) {
+            transactionsSkipped++;
+            continue;
+          }
+          final amount = double.tryParse(cols[1]);
+          if (amount == null) continue;
+          final date = DateTime.tryParse(cols[5]);
+          if (date == null) continue;
+          _transactions.add(Transaction(
+            id: id,
+            amount: amount,
+            category: cols[2],
+            emoji: cols.length > 3 ? cols[3] : '',
+             note: cols.length > 4 ? cols[4] : '',
+             date: date,
+             isExpense: cols[6].toLowerCase() == 'true',
+             accountId: cols.length > 7 ? cols[7] : '',
+           ));
+           transactionsImported++;
+         }
+       }
+     }
+     setState(() {});
+     _saveTransactions();
+     _saveAccounts();
+     if (!mounted) return;
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content: Text('导入完成：账户 $accountsImported 个，交易 $transactionsImported 条，跳过 $transactionsSkipped 条（已存在）')),
+     );
+   }
+
+  Future<String?> _showPasteDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('粘贴 CSV 内容'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('请粘贴 CSV 内容（首行为表头）',
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 10,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText:
+                    'id,amount,category,emoji,note,date,isExpense,accountId\n...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    return result;
   }
 
   List<String> _parseCsvLine(String line) {
